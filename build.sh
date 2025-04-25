@@ -36,6 +36,8 @@ echo "Creating necessary directories..."
 mkdir -p internal/handlers && echo "Created internal/handlers"
 mkdir -p internal/models && echo "Created internal/models"
 mkdir -p internal/database && echo "Created internal/database"
+mkdir -p internal/middleware && echo "Created internal/middleware"
+mkdir -p internal/utils && echo "Created internal/utils"
 mkdir -p cmd/api && echo "Created cmd/api"
 
 # Create a backup of main.go if it exists
@@ -44,8 +46,75 @@ if [ -f cmd/api/main.go ]; then
   echo "Backed up existing main.go"
 fi
 
-# Create CSV upload implementation
-echo "Creating CSV upload implementation..."
+# Create User model
+echo "Creating User model..."
+cat > internal/models/user.go << 'EOF'
+package models
+
+import (
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+// User represents a user in the system
+type User struct {
+	ID           primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Email        string             `json:"email" bson:"email"`
+	Phone        string             `json:"phone" bson:"phone"`
+	MSISDN       string             `json:"msisdn" bson:"msisdn"`
+	Password     string             `json:"-" bson:"password"`
+	FirstName    string             `json:"firstName" bson:"firstName"`
+	LastName     string             `json:"lastName" bson:"lastName"`
+	Role         string             `json:"role" bson:"role"`
+	OptInStatus  bool               `json:"optInStatus" bson:"optInStatus"`
+	OptInDate    time.Time          `json:"optInDate" bson:"optInDate"`
+	OptInChannel string             `json:"optInChannel" bson:"optInChannel"`
+	OptOutDate   time.Time          `json:"optOutDate" bson:"optOutDate"`
+	Points       int                `json:"points" bson:"points"`
+	IsBlacklisted bool              `json:"isBlacklisted" bson:"isBlacklisted"`
+	LastActivity time.Time          `json:"lastActivity" bson:"lastActivity"`
+	IsVerified   bool               `json:"isVerified" bson:"isVerified"`
+	CreatedAt    time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt    time.Time          `json:"updatedAt" bson:"updatedAt"`
+	LastLoginAt  time.Time          `json:"lastLoginAt,omitempty" bson:"lastLoginAt,omitempty"`
+}
+
+// UserRegistration represents the data needed for user registration
+type UserRegistration struct {
+	Email     string `json:"email" binding:"required,email"`
+	Phone     string `json:"phone" binding:"required"`
+	MSISDN    string `json:"msisdn" binding:"required"`
+	Password  string `json:"password" binding:"required,min=6"`
+	FirstName string `json:"firstName" binding:"required"`
+	LastName  string `json:"lastName" binding:"required"`
+}
+
+// UserLogin represents the data needed for user login
+type UserLogin struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
+}
+
+// AdminCreation represents the data needed for admin creation
+type AdminCreation struct {
+	Email     string `json:"email" binding:"required,email"`
+	Phone     string `json:"phone" binding:"required"`
+	MSISDN    string `json:"msisdn" binding:"required"`
+	Password  string `json:"password" binding:"required,min=6"`
+	FirstName string `json:"firstName" binding:"required"`
+	LastName  string `json:"lastName" binding:"required"`
+}
+
+// TokenResponse represents the response for successful authentication
+type TokenResponse struct {
+	Token     string `json:"token"`
+	ExpiresIn int64  `json:"expiresIn"`
+	Role      string `json:"role"`
+	UserID    string `json:"userId"`
+}
+EOF
+echo "User model created"
 
 # Create transaction model
 echo "Creating transaction model..."
@@ -76,6 +145,498 @@ type UploadResponse struct {
 }
 EOF
 echo "Transaction model created"
+
+# Create JWT utils
+echo "Creating JWT utilities..."
+cat > internal/utils/jwt.go << 'EOF'
+package utils
+
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/dgrijalva/jwt-go"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+// JWTClaims represents the claims in the JWT
+type JWTClaims struct {
+	UserID string `json:"userId"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+	jwt.StandardClaims
+}
+
+// GenerateToken generates a new JWT token
+func GenerateToken(userID primitive.ObjectID, email, role string) (string, int64, error) {
+	// Get JWT secret from environment
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "bridgetunes-mtn-secret-key" // Default secret key
+	}
+
+	// Set expiration time
+	expirationTime := time.Now().Add(24 * time.Hour) // 24 hours
+	expiresIn := expirationTime.Unix()
+
+	// Create claims
+	claims := &JWTClaims{
+		UserID: userID.Hex(),
+		Email:  email,
+		Role:   role,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expiresIn,
+			IssuedAt:  time.Now().Unix(),
+			Issuer:    "bridgetunes-mtn-backend",
+		},
+	}
+
+	// Create token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Sign token
+	tokenString, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return "", 0, err
+	}
+
+	return tokenString, expiresIn, nil
+}
+
+// ValidateToken validates a JWT token
+func ValidateToken(tokenString string) (*JWTClaims, error) {
+	// Get JWT secret from environment
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "bridgetunes-mtn-secret-key" // Default secret key
+	}
+
+	// Parse token
+	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(jwtSecret), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate token and extract claims
+	if claims, ok := token.Claims.(*JWTClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("invalid token")
+}
+EOF
+echo "JWT utilities created"
+
+# Create authentication middleware
+echo "Creating authentication middleware..."
+cat > internal/middleware/auth.go << 'EOF'
+package middleware
+
+import (
+	"net/http"
+	"strings"
+
+	"github.com/bridgetunes/mtn-backend/internal/utils"
+	"github.com/gin-gonic/gin"
+)
+
+// AuthMiddleware authenticates requests
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+			c.Abort()
+			return
+		}
+
+		// Check if Authorization header has Bearer prefix
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header must be in format: Bearer {token}"})
+			c.Abort()
+			return
+		}
+
+		// Validate token
+		tokenString := parts[1]
+		claims, err := utils.ValidateToken(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+
+		// Set user information in context
+		c.Set("userId", claims.UserID)
+		c.Set("email", claims.Email)
+		c.Set("role", claims.Role)
+
+		c.Next()
+	}
+}
+
+// AdminMiddleware ensures the user is an admin
+func AdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get role from context (set by AuthMiddleware)
+		role, exists := c.Get("role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User role not found"})
+			c.Abort()
+			return
+		}
+
+		// Check if user is admin
+		if role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+EOF
+echo "Authentication middleware created"
+
+# Create authentication handler
+echo "Creating authentication handler..."
+cat > internal/handlers/auth_handler.go << 'EOF'
+package handlers
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/bridgetunes/mtn-backend/internal/models"
+	"github.com/bridgetunes/mtn-backend/internal/utils"
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// AuthHandler handles authentication-related requests
+type AuthHandler struct {
+	collection *mongo.Collection
+}
+
+// NewAuthHandler creates a new authentication handler
+func NewAuthHandler(db *mongo.Database) *AuthHandler {
+	log.Println("Initializing AuthHandler...")
+	collection := db.Collection("users")
+
+	// Create index on email for faster lookups and to prevent duplicates
+	indexModel := mongo.IndexModel{
+		Keys:    bson.D{{Key: "email", Value: 1}},
+		Options: mongo.options.Index().SetUnique(true),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := collection.Indexes().CreateOne(ctx, indexModel)
+	if err != nil {
+		log.Printf("Warning: Failed to create index on email: %v\n", err)
+	} else {
+		log.Println("Successfully created index on users collection")
+	}
+
+	// Create index on phone for faster lookups and to prevent duplicates
+	phoneIndexModel := mongo.IndexModel{
+		Keys:    bson.D{{Key: "phone", Value: 1}},
+		Options: mongo.options.Index().SetUnique(true),
+	}
+
+	_, err = collection.Indexes().CreateOne(ctx, phoneIndexModel)
+	if err != nil {
+		log.Printf("Warning: Failed to create index on phone: %v\n", err)
+	} else {
+		log.Println("Successfully created index on phone field")
+	}
+
+	// Create index on MSISDN for faster lookups and to prevent duplicates
+	msisdnIndexModel := mongo.IndexModel{
+		Keys:    bson.D{{Key: "msisdn", Value: 1}},
+		Options: mongo.options.Index().SetUnique(true),
+	}
+
+	_, err = collection.Indexes().CreateOne(ctx, msisdnIndexModel)
+	if err != nil {
+		log.Printf("Warning: Failed to create index on MSISDN: %v\n", err)
+	} else {
+		log.Println("Successfully created index on MSISDN field")
+	}
+
+	return &AuthHandler{
+		collection: collection,
+	}
+}
+
+// Register handles user registration
+func (h *AuthHandler) Register(c *gin.Context) {
+	log.Println("Register handler called")
+
+	// Parse request body
+	var registration models.UserRegistration
+	if err := c.ShouldBindJSON(&registration); err != nil {
+		log.Printf("Error binding JSON: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if user already exists
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var existingUser models.User
+	err := h.collection.FindOne(ctx, bson.M{
+		"$or": []bson.M{
+			{"email": registration.Email},
+			{"phone": registration.Phone},
+			{"msisdn": registration.MSISDN},
+		},
+	}).Decode(&existingUser)
+
+	if err == nil {
+		log.Println("User already exists")
+		c.JSON(http.StatusConflict, gin.H{"error": "User with this email, phone, or MSISDN already exists"})
+		return
+	} else if err != mongo.ErrNoDocuments {
+		log.Printf("Database error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(registration.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// Create user
+	now := time.Now()
+	user := models.User{
+		ID:           primitive.NewObjectID(),
+		Email:        registration.Email,
+		Phone:        registration.Phone,
+		MSISDN:       registration.MSISDN,
+		Password:     string(hashedPassword),
+		FirstName:    registration.FirstName,
+		LastName:     registration.LastName,
+		Role:         "user", // Default role is user
+		OptInStatus:  true,
+		OptInDate:    now,
+		OptInChannel: "registration",
+		Points:       0,
+		IsBlacklisted: false,
+		LastActivity: now,
+		IsVerified:   false,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	// Insert user into database
+	_, err = h.collection.InsertOne(ctx, user)
+	if err != nil {
+		log.Printf("Error inserting user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	// Generate JWT token
+	token, expiresIn, err := utils.GenerateToken(user.ID, user.Email, user.Role)
+	if err != nil {
+		log.Printf("Error generating token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	// Return token
+	c.JSON(http.StatusCreated, models.TokenResponse{
+		Token:     token,
+		ExpiresIn: expiresIn,
+		Role:      user.Role,
+		UserID:    user.ID.Hex(),
+	})
+}
+
+// Login handles user login
+func (h *AuthHandler) Login(c *gin.Context) {
+	log.Println("Login handler called")
+
+	// Parse request body
+	var login models.UserLogin
+	if err := c.ShouldBindJSON(&login); err != nil {
+		log.Printf("Error binding JSON: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Find user by email
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var user models.User
+	err := h.collection.FindOne(ctx, bson.M{"email": login.Email}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Println("User not found")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+			return
+		}
+		log.Printf("Database error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Check if user is blacklisted
+	if user.IsBlacklisted {
+		log.Println("User is blacklisted")
+		c.JSON(http.StatusForbidden, gin.H{"error": "Your account has been blacklisted"})
+		return
+	}
+
+	// Verify password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(login.Password))
+	if err != nil {
+		log.Println("Invalid password")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		return
+	}
+
+	// Update last login time
+	now := time.Now()
+	_, err = h.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": user.ID},
+		bson.M{
+			"$set": bson.M{
+				"lastLoginAt":  now,
+				"lastActivity": now,
+				"updatedAt":    now,
+			},
+		},
+	)
+	if err != nil {
+		log.Printf("Error updating last login time: %v", err)
+		// Continue anyway, this is not critical
+	}
+
+	// Generate JWT token
+	token, expiresIn, err := utils.GenerateToken(user.ID, user.Email, user.Role)
+	if err != nil {
+		log.Printf("Error generating token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	// Return token
+	c.JSON(http.StatusOK, models.TokenResponse{
+		Token:     token,
+		ExpiresIn: expiresIn,
+		Role:      user.Role,
+		UserID:    user.ID.Hex(),
+	})
+}
+
+// CreateAdmin handles admin user creation
+func (h *AuthHandler) CreateAdmin(c *gin.Context) {
+	log.Println("CreateAdmin handler called")
+
+	// Parse request body
+	var adminCreation models.AdminCreation
+	if err := c.ShouldBindJSON(&adminCreation); err != nil {
+		log.Printf("Error binding JSON: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if user already exists
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var existingUser models.User
+	err := h.collection.FindOne(ctx, bson.M{
+		"$or": []bson.M{
+			{"email": adminCreation.Email},
+			{"phone": adminCreation.Phone},
+			{"msisdn": adminCreation.MSISDN},
+		},
+	}).Decode(&existingUser)
+
+	if err == nil {
+		log.Println("User already exists")
+		c.JSON(http.StatusConflict, gin.H{"error": "User with this email, phone, or MSISDN already exists"})
+		return
+	} else if err != mongo.ErrNoDocuments {
+		log.Printf("Database error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminCreation.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// Create admin user
+	now := time.Now()
+	admin := models.User{
+		ID:           primitive.NewObjectID(),
+		Email:        adminCreation.Email,
+		Phone:        adminCreation.Phone,
+		MSISDN:       adminCreation.MSISDN,
+		Password:     string(hashedPassword),
+		FirstName:    adminCreation.FirstName,
+		LastName:     adminCreation.LastName,
+		Role:         "admin", // Admin role
+		OptInStatus:  true,
+		OptInDate:    now,
+		OptInChannel: "admin_creation",
+		Points:       0,
+		IsBlacklisted: false,
+		LastActivity: now,
+		IsVerified:   true, // Admins are automatically verified
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	// Insert admin into database
+	_, err = h.collection.InsertOne(ctx, admin)
+	if err != nil {
+		log.Printf("Error inserting admin: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create admin"})
+		return
+	}
+
+	// Return success
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Admin created successfully",
+		"userId":  admin.ID.Hex(),
+		"role":    admin.Role,
+	})
+}
+EOF
+echo "Authentication handler created"
 
 # Create transaction handler with fixed variable naming
 echo "Creating transaction handler..."
@@ -381,8 +942,8 @@ func Connect() (*mongo.Client, *mongo.Database, error) {
 EOF
 echo "Database connection helper created"
 
-# Update main.go to include CSV upload endpoint with built-in CORS middleware and debug logging
-echo "Creating main.go with debug logging..."
+# Update main.go to include authentication and CSV upload endpoints
+echo "Creating main.go with authentication and CSV upload..."
 cat > cmd/api/main.go << 'EOF'
 package main
 
@@ -392,6 +953,7 @@ import (
 
 	"github.com/bridgetunes/mtn-backend/internal/database"
 	"github.com/bridgetunes/mtn-backend/internal/handlers"
+	"github.com/bridgetunes/mtn-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -425,6 +987,7 @@ func main() {
 
 	// Initialize handlers
 	log.Println("Initializing handlers...")
+	authHandler := handlers.NewAuthHandler(db)
 	transactionHandler := handlers.NewTransactionHandler(db)
 
 	// Initialize router
@@ -456,44 +1019,48 @@ func main() {
 	log.Println("Defining API routes...")
 	api := router.Group("/api")
 	{
-		// Auth routes (placeholders)
+		// Auth routes
 		auth := api.Group("/auth")
 		{
-			auth.POST("/register", func(c *gin.Context) {
-				log.Println("Register endpoint called")
-				c.JSON(200, gin.H{"message": "Registration endpoint"})
-			})
-			auth.POST("/login", func(c *gin.Context) {
-				log.Println("Login endpoint called")
-				c.JSON(200, gin.H{"message": "Login endpoint"})
-			})
-			auth.POST("/admin", func(c *gin.Context) {
-				log.Println("Admin creation endpoint called")
-				c.JSON(200, gin.H{"message": "Admin creation endpoint"})
-			})
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/login", authHandler.Login)
+			
+			// Admin creation route (protected by auth middleware)
+			adminRoute := auth.Group("/admin")
+			adminRoute.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
+			adminRoute.POST("", authHandler.CreateAdmin)
 		}
 
 		// CSV upload route
 		log.Println("Registering CSV upload route: /api/upload/transactions")
 		api.POST("/upload/transactions", transactionHandler.UploadCSV)
 
-		// Protected routes (placeholders)
+		// Protected routes
 		protected := api.Group("/protected")
+		protected.Use(middleware.AuthMiddleware())
 		{
+			// User routes (accessible by all authenticated users)
 			protected.GET("/user/:id", func(c *gin.Context) {
 				id := c.Param("id")
 				log.Printf("Get user endpoint called with id: %s", id)
 				c.JSON(200, gin.H{"message": "Get user endpoint", "id": id})
 			})
+			
 			protected.PUT("/user/:id", func(c *gin.Context) {
 				id := c.Param("id")
 				log.Printf("Update user endpoint called with id: %s", id)
 				c.JSON(200, gin.H{"message": "Update user endpoint", "id": id})
 			})
-			protected.GET("/admin/dashboard", func(c *gin.Context) {
-				log.Println("Admin dashboard endpoint called")
-				c.JSON(200, gin.H{"message": "Admin dashboard"})
-			})
+			
+			// Admin routes (accessible only by admins)
+			admin := protected.Group("/admin")
+			admin.Use(middleware.AdminMiddleware())
+			{
+				admin.GET("/dashboard", func(c *gin.Context) {
+					log.Println("Admin dashboard endpoint called")
+					c.JSON(200, gin.H{"message": "Admin dashboard"})
+				})
+			}
 		}
 
 		// Health check route
@@ -514,7 +1081,10 @@ func main() {
 				"/api/health",
 				"/api/auth/register",
 				"/api/auth/login",
+				"/api/auth/admin",
 				"/api/upload/transactions",
+				"/api/protected/user/:id",
+				"/api/protected/admin/dashboard",
 			},
 		})
 	})
@@ -541,7 +1111,7 @@ func getWorkingDir() string {
 	return dir
 }
 EOF
-echo "Main application created with debug logging"
+echo "Main application created with authentication and CSV upload"
 
 # Build the application
 echo "Building application..."
