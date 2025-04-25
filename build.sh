@@ -19,6 +19,14 @@ go get go.mongodb.org/mongo-driver/mongo/options
 # Run go mod tidy to clean up dependencies
 go mod tidy
 
-# Build the application with flags to ignore unused imports
+# Fix unused imports in problematic files
+echo "Fixing unused imports in pkg/mtnapi/client.go"
+sed -i '/encoding\/json/d' pkg/mtnapi/client.go || true
+
+echo "Fixing unused imports in internal/middleware/middleware.go"
+sed -i '/context/d' internal/middleware/middleware.go || true
+
+# Build the application
 cd ./cmd/api
-go build -o ../../app -gcflags="-e" .
+go build -o ../../app .
+
