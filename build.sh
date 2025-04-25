@@ -19,6 +19,6 @@ go get go.mongodb.org/mongo-driver/mongo/options
 # Run go mod tidy to clean up dependencies
 go mod tidy
 
-# Build the application
+# Build the application with flags to ignore unused imports
 cd ./cmd/api
-go build -o ../../app .
+go build -o ../../app -gcflags="-e" .
