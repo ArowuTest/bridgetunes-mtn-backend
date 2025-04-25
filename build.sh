@@ -1,13 +1,16 @@
 #!/bin/bash
 set -e
 
-# Print Go version
+# Print Go version and environment information for debugging
 go version
+echo "Current directory: $(pwd)"
+echo "Directory contents: $(ls -la)"
 
 # Force Go modules mode
 export GO111MODULE=on
 
 # Install all dependencies explicitly
+echo "Installing dependencies..."
 go get github.com/gin-gonic/gin
 go get github.com/joho/godotenv
 go get github.com/dgrijalva/jwt-go
@@ -21,37 +24,31 @@ go get golang.org/x/crypto/bcrypt
 go mod tidy
 
 # Fix unused imports in problematic files (without modifying existing code)
-echo "Fixing unused imports in pkg/mtnapi/client.go"
-sed -i '/encoding\/json/d' pkg/mtnapi/client.go || true
+echo "Fixing unused imports in problematic files..."
+sed -i '/encoding\/json/d' pkg/mtnapi/client.go || echo "Warning: Could not fix imports in pkg/mtnapi/client.go"
+sed -i '/context/d' internal/middleware/middleware.go || echo "Warning: Could not fix imports in internal/middleware/middleware.go"
+sed -i '/github.com\/bridgetunes\/mtn-backend\/internal\/models/d' internal/handlers/draw_handler.go || echo "Warning: Could not fix imports in internal/handlers/draw_handler.go"
+sed -i '/time/d' internal/handlers/notification_handler.go || echo "Warning: Could not fix imports in internal/handlers/notification_handler.go"
+sed -i '/time/d' internal/handlers/user_handler.go || echo "Warning: Could not fix imports in internal/handlers/user_handler.go"
 
-echo "Fixing unused imports in internal/middleware/middleware.go"
-sed -i '/context/d' internal/middleware/middleware.go || true
-
-echo "Fixing unused imports in internal/handlers/draw_handler.go"
-sed -i '/github.com\/bridgetunes\/mtn-backend\/internal\/models/d' internal/handlers/draw_handler.go || true
-
-echo "Fixing unused imports in internal/handlers/notification_handler.go"
-sed -i '/time/d' internal/handlers/notification_handler.go || true
-
-echo "Fixing unused imports in internal/handlers/user_handler.go"
-sed -i '/time/d' internal/handlers/user_handler.go || true
-
-# Create necessary directories
-echo "Creating necessary directories"
-mkdir -p internal/handlers
-mkdir -p internal/models
-mkdir -p internal/database
-mkdir -p cmd/api
+# Create necessary directories with verbose output
+echo "Creating necessary directories..."
+mkdir -p internal/handlers && echo "Created internal/handlers"
+mkdir -p internal/models && echo "Created internal/models"
+mkdir -p internal/database && echo "Created internal/database"
+mkdir -p cmd/api && echo "Created cmd/api"
 
 # Create a backup of main.go if it exists
 if [ -f cmd/api/main.go ]; then
   cp cmd/api/main.go cmd/api/main.go.bak
+  echo "Backed up existing main.go"
 fi
 
 # Create CSV upload implementation
-echo "Creating CSV upload implementation"
+echo "Creating CSV upload implementation..."
 
 # Create transaction model
+echo "Creating transaction model..."
 cat > internal/models/transaction.go << 'EOF'
 package models
 
@@ -78,8 +75,10 @@ type UploadResponse struct {
 	Errors       []string `json:"errors"`
 }
 EOF
+echo "Transaction model created"
 
 # Create transaction handler
+echo "Creating transaction handler..."
 cat > internal/handlers/transaction_handler.go << 'EOF'
 package handlers
 
@@ -88,6 +87,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -107,6 +107,7 @@ type TransactionHandler struct {
 
 // NewTransactionHandler creates a new transaction handler
 func NewTransactionHandler(db *mongo.Database) *TransactionHandler {
+	log.Println("Initializing TransactionHandler...")
 	collection := db.Collection("transactions")
 
 	// Create index on MSISDN and RechargeDate for faster lookups and to prevent duplicates
@@ -123,7 +124,9 @@ func NewTransactionHandler(db *mongo.Database) *TransactionHandler {
 	
 	_, err := collection.Indexes().CreateOne(ctx, indexModel)
 	if err != nil {
-		fmt.Printf("Warning: Failed to create index: %v\n", err)
+		log.Printf("Warning: Failed to create index: %v\n", err)
+	} else {
+		log.Println("Successfully created index on transactions collection")
 	}
 
 	return &TransactionHandler{
@@ -133,9 +136,12 @@ func NewTransactionHandler(db *mongo.Database) *TransactionHandler {
 
 // UploadCSV handles CSV file uploads
 func (h *TransactionHandler) UploadCSV(c *gin.Context) {
+	log.Println("UploadCSV handler called")
+	
 	// Get file from request
-	file, _, err := c.Request.FormFile("file")
+	file, header, err := c.Request.FormFile("file")
 	if err != nil {
+		log.Printf("Error getting file from request: %v", err)
 		c.JSON(http.StatusBadRequest, models.UploadResponse{
 			Success: false,
 			Message: "No file uploaded",
@@ -144,6 +150,8 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 		return
 	}
 	defer file.Close()
+	
+	log.Printf("Received file: %s", header.Filename)
 
 	// Parse CSV
 	reader := csv.NewReader(file)
@@ -151,6 +159,7 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 	// Read header
 	header, err := reader.Read()
 	if err != nil {
+		log.Printf("Error reading CSV header: %v", err)
 		c.JSON(http.StatusBadRequest, models.UploadResponse{
 			Success: false,
 			Message: "Failed to read CSV header",
@@ -158,11 +167,14 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 		})
 		return
 	}
+	
+	log.Printf("CSV header: %v", header)
 
 	// Validate header
 	expectedHeaders := []string{"MSISDN", "Recharge Amount", "Opt-In Status", "Recharge Date"}
 	for i, h := range expectedHeaders {
 		if i >= len(header) || !strings.Contains(header[i], expectedHeaders[i]) {
+			log.Printf("Invalid CSV format: expected header '%s' not found", h)
 			c.JSON(http.StatusBadRequest, models.UploadResponse{
 				Success: false,
 				Message: "Invalid CSV format",
@@ -238,6 +250,8 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 
 		transactions = append(transactions, transaction)
 	}
+	
+	log.Printf("Processed %d records from CSV", totalRecords)
 
 	// Insert transactions into MongoDB
 	if len(transactions) > 0 {
@@ -249,25 +263,33 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 		if err != nil {
 			// Handle duplicate key errors
 			if mongo.IsDuplicateKeyError(err) {
+				log.Printf("Some records were not inserted due to duplicate keys: %v", err)
 				errors = append(errors, "Some records were not inserted due to duplicate MSISDN and recharge date")
-				inserted = len(result.InsertedIDs)
+				if result != nil {
+					inserted = len(result.InsertedIDs)
+				}
 			} else {
+				log.Printf("Database error: %v", err)
 				errors = append(errors, fmt.Sprintf("Database error: %v", err))
 				inserted = 0
 			}
 		} else {
 			inserted = len(result.InsertedIDs)
+			log.Printf("Successfully inserted %d records into MongoDB", inserted)
 		}
 	}
 
 	// Return response
-	c.JSON(http.StatusOK, models.UploadResponse{
+	response := models.UploadResponse{
 		Success:      len(errors) == 0,
 		Message:      fmt.Sprintf("Processed %d records, inserted %d", totalRecords, inserted),
 		TotalRecords: totalRecords,
 		Inserted:     inserted,
 		Errors:       errors,
-	})
+	}
+	
+	log.Printf("Upload response: %+v", response)
+	c.JSON(http.StatusOK, response)
 }
 
 // Calculate points based on recharge amount according to REQFUNC025
@@ -300,8 +322,10 @@ func calculatePoints(amount float64) int {
 	}
 }
 EOF
+echo "Transaction handler created"
 
 # Create database connection helper
+echo "Creating database connection helper..."
 cat > internal/database/mongodb.go << 'EOF'
 package database
 
@@ -317,38 +341,48 @@ import (
 
 // Connect establishes a connection to MongoDB
 func Connect() (*mongo.Client, *mongo.Database, error) {
+	log.Println("Connecting to MongoDB...")
+	
 	// Get MongoDB URI from environment
 	uri := os.Getenv("MONGODB_URI")
 	if uri == "" {
 		uri = "mongodb+srv://fsanus20111:wXVTvRfaCtcd5W7t@cluster0.llhkakp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+		log.Println("Using default MongoDB URI")
 	}
 
 	// Get database name from environment
 	dbName := os.Getenv("MONGODB_DATABASE")
 	if dbName == "" {
 		dbName = "bridgetunes"
+		log.Println("Using default database name: bridgetunes")
 	}
 
 	// Create client
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	log.Printf("Connecting to MongoDB at %s", uri)
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
+		log.Printf("Error connecting to MongoDB: %v", err)
 		return nil, nil, err
 	}
 
 	// Ping database
+	log.Println("Pinging MongoDB...")
 	if err := client.Ping(ctx, nil); err != nil {
+		log.Printf("Error pinging MongoDB: %v", err)
 		return nil, nil, err
 	}
 
-	log.Println("Connected to MongoDB")
+	log.Println("Successfully connected to MongoDB")
 	return client, client.Database(dbName), nil
 }
 EOF
+echo "Database connection helper created"
 
-# Update main.go to include CSV upload endpoint with built-in CORS middleware
+# Update main.go to include CSV upload endpoint with built-in CORS middleware and debug logging
+echo "Creating main.go with debug logging..."
 cat > cmd/api/main.go << 'EOF'
 package main
 
@@ -363,6 +397,14 @@ import (
 )
 
 func main() {
+	// Configure logging
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.Println("Starting Bridgetunes MTN backend application...")
+	
+	// Print environment information
+	log.Printf("Working directory: %s", getWorkingDir())
+	log.Printf("Environment variables: PORT=%s", os.Getenv("PORT"))
+
 	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
@@ -370,6 +412,7 @@ func main() {
 	}
 
 	// Initialize MongoDB connection
+	log.Println("Initializing MongoDB connection...")
 	client, db, err := database.Connect()
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
@@ -381,12 +424,20 @@ func main() {
 	}()
 
 	// Initialize handlers
+	log.Println("Initializing handlers...")
 	transactionHandler := handlers.NewTransactionHandler(db)
 
 	// Initialize router
-	router := gin.Default()
+	log.Println("Initializing Gin router...")
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	
+	// Add logging middleware
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
 
 	// Apply built-in CORS middleware
+	log.Println("Applying CORS middleware...")
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -402,23 +453,28 @@ func main() {
 	})
 
 	// Define routes
+	log.Println("Defining API routes...")
 	api := router.Group("/api")
 	{
 		// Auth routes (placeholders)
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", func(c *gin.Context) {
+				log.Println("Register endpoint called")
 				c.JSON(200, gin.H{"message": "Registration endpoint"})
 			})
 			auth.POST("/login", func(c *gin.Context) {
+				log.Println("Login endpoint called")
 				c.JSON(200, gin.H{"message": "Login endpoint"})
 			})
 			auth.POST("/admin", func(c *gin.Context) {
+				log.Println("Admin creation endpoint called")
 				c.JSON(200, gin.H{"message": "Admin creation endpoint"})
 			})
 		}
 
 		// CSV upload route
+		log.Println("Registering CSV upload route: /api/upload/transactions")
 		api.POST("/upload/transactions", transactionHandler.UploadCSV)
 
 		// Protected routes (placeholders)
@@ -426,33 +482,73 @@ func main() {
 		{
 			protected.GET("/user/:id", func(c *gin.Context) {
 				id := c.Param("id")
+				log.Printf("Get user endpoint called with id: %s", id)
 				c.JSON(200, gin.H{"message": "Get user endpoint", "id": id})
 			})
 			protected.PUT("/user/:id", func(c *gin.Context) {
 				id := c.Param("id")
+				log.Printf("Update user endpoint called with id: %s", id)
 				c.JSON(200, gin.H{"message": "Update user endpoint", "id": id})
 			})
 			protected.GET("/admin/dashboard", func(c *gin.Context) {
+				log.Println("Admin dashboard endpoint called")
 				c.JSON(200, gin.H{"message": "Admin dashboard"})
 			})
 		}
 
 		// Health check route
 		api.GET("/health", func(c *gin.Context) {
+			log.Println("Health check endpoint called")
 			c.JSON(200, gin.H{"status": "ok", "message": "API is running"})
 		})
 	}
+
+	// Add a root route for easy testing
+	router.GET("/", func(c *gin.Context) {
+		log.Println("Root endpoint called")
+		c.JSON(200, gin.H{
+			"message": "Bridgetunes MTN Backend API",
+			"version": "1.0.0",
+			"status": "running",
+			"endpoints": []string{
+				"/api/health",
+				"/api/auth/register",
+				"/api/auth/login",
+				"/api/upload/transactions",
+			},
+		})
+	})
 
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
+		log.Println("No PORT environment variable found, using default port 8080")
 	}
+	
 	log.Printf("Server starting on port %s", port)
-	router.Run(":" + port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+// Helper function to get working directory
+func getWorkingDir() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "unknown"
+	}
+	return dir
 }
 EOF
+echo "Main application created with debug logging"
 
 # Build the application
+echo "Building application..."
 cd ./cmd/api
 go build -o ../../app .
+echo "Build completed successfully"
+
+# Print success message
+echo "Build script completed successfully"
+echo "You can now deploy the application to Render.com"
