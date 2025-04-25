@@ -77,7 +77,7 @@ type UploadResponse struct {
 EOF
 echo "Transaction model created"
 
-# Create transaction handler
+# Create transaction handler with fixed variable naming
 echo "Creating transaction handler..."
 cat > internal/handlers/transaction_handler.go << 'EOF'
 package handlers
@@ -139,7 +139,7 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 	log.Println("UploadCSV handler called")
 	
 	// Get file from request
-	file, header, err := c.Request.FormFile("file")
+	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
 		log.Printf("Error getting file from request: %v", err)
 		c.JSON(http.StatusBadRequest, models.UploadResponse{
@@ -151,13 +151,13 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 	}
 	defer file.Close()
 	
-	log.Printf("Received file: %s", header.Filename)
+	log.Printf("Received file: %s", fileHeader.Filename)
 
 	// Parse CSV
 	reader := csv.NewReader(file)
 
 	// Read header
-	header, err := reader.Read()
+	csvHeader, err := reader.Read()
 	if err != nil {
 		log.Printf("Error reading CSV header: %v", err)
 		c.JSON(http.StatusBadRequest, models.UploadResponse{
@@ -168,12 +168,12 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 		return
 	}
 	
-	log.Printf("CSV header: %v", header)
+	log.Printf("CSV header: %v", csvHeader)
 
 	// Validate header
 	expectedHeaders := []string{"MSISDN", "Recharge Amount", "Opt-In Status", "Recharge Date"}
 	for i, h := range expectedHeaders {
-		if i >= len(header) || !strings.Contains(header[i], expectedHeaders[i]) {
+		if i >= len(csvHeader) || !strings.Contains(csvHeader[i], expectedHeaders[i]) {
 			log.Printf("Invalid CSV format: expected header '%s' not found", h)
 			c.JSON(http.StatusBadRequest, models.UploadResponse{
 				Success: false,
