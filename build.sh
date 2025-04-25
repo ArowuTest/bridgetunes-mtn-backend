@@ -69,6 +69,7 @@ type User struct {
 	OptInStatus   bool               `json:"optInStatus" bson:"optInStatus"`
 	OptInDate     time.Time          `json:"optInDate" bson:"optInDate"`
 	OptInChannel  string             `json:"optInChannel" bson:"optInChannel"`
+	OptOutDate    *time.Time         `json:"optOutDate,omitempty" bson:"optOutDate,omitempty"`
 	Points        int                `json:"points" bson:"points"`
 	IsBlacklisted bool               `json:"isBlacklisted" bson:"isBlacklisted"`
 	LastActivity  time.Time          `json:"lastActivity" bson:"lastActivity"`
@@ -94,20 +95,21 @@ type UserLogin struct {
 
 // UserResponse represents the user data returned to the client
 type UserResponse struct {
-	ID            string    `json:"id"`
-	Email         string    `json:"email,omitempty"`
-	Phone         string    `json:"phone,omitempty"`
-	FirstName     string    `json:"firstName"`
-	LastName      string    `json:"lastName"`
-	Role          string    `json:"role"`
-	MSISDN        string    `json:"msisdn,omitempty"`
-	OptInStatus   bool      `json:"optInStatus"`
-	OptInDate     time.Time `json:"optInDate,omitempty"`
-	OptInChannel  string    `json:"optInChannel,omitempty"`
-	Points        int       `json:"points"`
-	IsBlacklisted bool      `json:"isBlacklisted"`
-	LastActivity  time.Time `json:"lastActivity,omitempty"`
-	CreatedAt     time.Time `json:"createdAt"`
+	ID            string     `json:"id"`
+	Email         string     `json:"email,omitempty"`
+	Phone         string     `json:"phone,omitempty"`
+	FirstName     string     `json:"firstName"`
+	LastName      string     `json:"lastName"`
+	Role          string     `json:"role"`
+	MSISDN        string     `json:"msisdn,omitempty"`
+	OptInStatus   bool       `json:"optInStatus"`
+	OptInDate     time.Time  `json:"optInDate,omitempty"`
+	OptInChannel  string     `json:"optInChannel,omitempty"`
+	OptOutDate    *time.Time `json:"optOutDate,omitempty"`
+	Points        int        `json:"points"`
+	IsBlacklisted bool       `json:"isBlacklisted"`
+	LastActivity  time.Time  `json:"lastActivity,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 // LoginResponse represents the response after successful login
@@ -564,6 +566,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			OptInStatus:  user.OptInStatus,
 			OptInDate:    user.OptInDate,
 			OptInChannel: user.OptInChannel,
+			OptOutDate:   user.OptOutDate,
 			Points:       user.Points,
 			IsBlacklisted: user.IsBlacklisted,
 			LastActivity: user.LastActivity,
@@ -665,6 +668,7 @@ func (h *AuthHandler) CreateAdmin(c *gin.Context) {
 			OptInStatus:  user.OptInStatus,
 			OptInDate:    user.OptInDate,
 			OptInChannel: user.OptInChannel,
+			OptOutDate:   user.OptOutDate,
 			Points:       user.Points,
 			IsBlacklisted: user.IsBlacklisted,
 			LastActivity: user.LastActivity,
