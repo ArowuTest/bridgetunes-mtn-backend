@@ -39,8 +39,8 @@ sed -i '/time/d' internal/handlers/user_handler.go || true
 # Create models directory if it doesn't exist
 mkdir -p internal/models
 
-# Create user model with role field
-echo "Creating user model with role field"
+# Create user model with all required fields
+echo "Creating user model with all required fields"
 cat > internal/models/user.go << 'EOF'
 package models
 
@@ -52,26 +52,37 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID           primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	Email        string             `json:"email" bson:"email"`
-	Phone        string             `json:"phone" bson:"phone"`
-	Password     string             `json:"-" bson:"password"`
-	FirstName    string             `json:"firstName" bson:"firstName"`
-	LastName     string             `json:"lastName" bson:"lastName"`
-	Role         string             `json:"role" bson:"role"`
-	IsVerified   bool               `json:"isVerified" bson:"isVerified"`
-	CreatedAt    time.Time          `json:"createdAt" bson:"createdAt"`
-	UpdatedAt    time.Time          `json:"updatedAt" bson:"updatedAt"`
-	LastLoginAt  *time.Time         `json:"lastLoginAt,omitempty" bson:"lastLoginAt,omitempty"`
+	ID            primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Email         string             `json:"email" bson:"email"`
+	Phone         string             `json:"phone" bson:"phone"`
+	Password      string             `json:"-" bson:"password"`
+	FirstName     string             `json:"firstName" bson:"firstName"`
+	LastName      string             `json:"lastName" bson:"lastName"`
+	Role          string             `json:"role" bson:"role"`
+	IsVerified    bool               `json:"isVerified" bson:"isVerified"`
+	CreatedAt     time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt     time.Time          `json:"updatedAt" bson:"updatedAt"`
+	LastLoginAt   *time.Time         `json:"lastLoginAt,omitempty" bson:"lastLoginAt,omitempty"`
+	
+	// Additional fields from existing model
+	MSISDN        string             `json:"msisdn" bson:"msisdn"`
+	OptInStatus   bool               `json:"optInStatus" bson:"optInStatus"`
+	OptInDate     time.Time          `json:"optInDate" bson:"optInDate"`
+	OptInChannel  string             `json:"optInChannel" bson:"optInChannel"`
+	Points        int                `json:"points" bson:"points"`
+	IsBlacklisted bool               `json:"isBlacklisted" bson:"isBlacklisted"`
+	LastActivity  time.Time          `json:"lastActivity" bson:"lastActivity"`
 }
 
 // UserRegistration represents the data needed to register a new user
 type UserRegistration struct {
-	Email     string `json:"email" binding:"required_without=Phone,omitempty,email"`
-	Phone     string `json:"phone" binding:"required_without=Email,omitempty"`
-	Password  string `json:"password" binding:"required,min=6"`
-	FirstName string `json:"firstName" binding:"required"`
-	LastName  string `json:"lastName" binding:"required"`
+	Email        string `json:"email" binding:"required_without=Phone,omitempty,email"`
+	Phone        string `json:"phone" binding:"required_without=Email,omitempty"`
+	Password     string `json:"password" binding:"required,min=6"`
+	FirstName    string `json:"firstName" binding:"required"`
+	LastName     string `json:"lastName" binding:"required"`
+	MSISDN       string `json:"msisdn"`
+	OptInChannel string `json:"optInChannel"`
 }
 
 // UserLogin represents the data needed to log in
@@ -83,19 +94,101 @@ type UserLogin struct {
 
 // UserResponse represents the user data returned to the client
 type UserResponse struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email,omitempty"`
-	Phone     string    `json:"phone,omitempty"`
-	FirstName string    `json:"firstName"`
-	LastName  string    `json:"lastName"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID            string    `json:"id"`
+	Email         string    `json:"email,omitempty"`
+	Phone         string    `json:"phone,omitempty"`
+	FirstName     string    `json:"firstName"`
+	LastName      string    `json:"lastName"`
+	Role          string    `json:"role"`
+	MSISDN        string    `json:"msisdn,omitempty"`
+	OptInStatus   bool      `json:"optInStatus"`
+	OptInDate     time.Time `json:"optInDate,omitempty"`
+	OptInChannel  string    `json:"optInChannel,omitempty"`
+	Points        int       `json:"points"`
+	IsBlacklisted bool      `json:"isBlacklisted"`
+	LastActivity  time.Time `json:"lastActivity,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 // LoginResponse represents the response after successful login
 type LoginResponse struct {
 	Token string       `json:"token"`
 	User  UserResponse `json:"user"`
+}
+EOF
+
+# Create MongoDB client
+echo "Creating MongoDB client"
+mkdir -p pkg/mongodb
+
+cat > pkg/mongodb/client.go << 'EOF'
+package mongodb
+
+import (
+	"context"
+	"os"
+	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+// Client wraps the MongoDB client
+type Client struct {
+	client   *mongo.Client
+	database *mongo.Database
+}
+
+// NewClient creates a new MongoDB client
+func NewClient() (*Client, error) {
+	// Get MongoDB URI from environment
+	uri := os.Getenv("MONGODB_URI")
+	if uri == "" {
+		uri = "mongodb+srv://fsanus20111:wXVTvRfaCtcd5W7t@cluster0.llhkakp.mongodb.net/bridgetunes?retryWrites=true&w=majority&appName=Cluster0"
+	}
+
+	// Get database name from environment
+	dbName := os.Getenv("MONGODB_DATABASE")
+	if dbName == "" {
+		dbName = "bridgetunes"
+	}
+
+	// Create client
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, err
+	}
+
+	// Ping database
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, err
+	}
+
+	// Return client
+	return &Client{
+		client:   client,
+		database: client.Database(dbName),
+	}, nil
+}
+
+// Close closes the MongoDB client
+func (c *Client) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return c.client.Disconnect(ctx)
+}
+
+// Database returns the MongoDB database
+func (c *Client) Database() *mongo.Database {
+	return c.database
+}
+
+// Client returns the MongoDB client
+func (c *Client) Client() *mongo.Client {
+	return c.client
 }
 EOF
 
@@ -182,6 +275,20 @@ func (r *UserRepository) FindByPhone(ctx context.Context, phone string) (*models
 	return &user, nil
 }
 
+// FindByMSISDN finds a user by MSISDN
+func (r *UserRepository) FindByMSISDN(ctx context.Context, msisdn string) (*models.User, error) {
+	var user models.User
+	err := r.coll.FindOne(ctx, bson.M{"msisdn": msisdn}).Decode(&user)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // Create creates a new user
 func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	// Hash password
@@ -195,6 +302,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	user.Password = string(hashedPassword)
 	user.CreatedAt = now
 	user.UpdatedAt = now
+	user.LastActivity = now
 	
 	// Set default role if not specified
 	if user.Role == "" {
@@ -242,7 +350,8 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, id string) error {
 		bson.M{
 			"$set": bson.M{
 				"lastLoginAt": now,
-				"updatedAt":   now,
+				"lastActivity": now,
+				"updatedAt": now,
 			},
 		},
 	)
@@ -326,14 +435,34 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		}
 	}
 
+	if req.MSISDN != "" {
+		existingUser, err = h.userRepo.FindByMSISDN(ctx, req.MSISDN)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
+			return
+		}
+		if existingUser != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "MSISDN already registered"})
+			return
+		}
+	}
+
 	// Create user
+	now := time.Now()
 	user := &models.User{
-		Email:     req.Email,
-		Phone:     req.Phone,
-		Password:  req.Password,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Role:      "user", // Default role is user
+		Email:        req.Email,
+		Phone:        req.Phone,
+		Password:     req.Password,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
+		Role:         "user", // Default role is user
+		MSISDN:       req.MSISDN,
+		OptInStatus:  true,
+		OptInDate:    now,
+		OptInChannel: req.OptInChannel,
+		Points:       0,
+		IsBlacklisted: false,
+		LastActivity: now,
 	}
 
 	if err := h.userRepo.Create(ctx, user); err != nil {
@@ -352,13 +481,20 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, models.LoginResponse{
 		Token: token,
 		User: models.UserResponse{
-			ID:        user.ID.Hex(),
-			Email:     user.Email,
-			Phone:     user.Phone,
-			FirstName: user.FirstName,
-			LastName:  user.LastName,
-			Role:      user.Role,
-			CreatedAt: user.CreatedAt,
+			ID:           user.ID.Hex(),
+			Email:        user.Email,
+			Phone:        user.Phone,
+			FirstName:    user.FirstName,
+			LastName:     user.LastName,
+			Role:         user.Role,
+			MSISDN:       user.MSISDN,
+			OptInStatus:  user.OptInStatus,
+			OptInDate:    user.OptInDate,
+			OptInChannel: user.OptInChannel,
+			Points:       user.Points,
+			IsBlacklisted: user.IsBlacklisted,
+			LastActivity: user.LastActivity,
+			CreatedAt:    user.CreatedAt,
 		},
 	})
 }
@@ -418,13 +554,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, models.LoginResponse{
 		Token: token,
 		User: models.UserResponse{
-			ID:        user.ID.Hex(),
-			Email:     user.Email,
-			Phone:     user.Phone,
-			FirstName: user.FirstName,
-			LastName:  user.LastName,
-			Role:      user.Role,
-			CreatedAt: user.CreatedAt,
+			ID:           user.ID.Hex(),
+			Email:        user.Email,
+			Phone:        user.Phone,
+			FirstName:    user.FirstName,
+			LastName:     user.LastName,
+			Role:         user.Role,
+			MSISDN:       user.MSISDN,
+			OptInStatus:  user.OptInStatus,
+			OptInDate:    user.OptInDate,
+			OptInChannel: user.OptInChannel,
+			Points:       user.Points,
+			IsBlacklisted: user.IsBlacklisted,
+			LastActivity: user.LastActivity,
+			CreatedAt:    user.CreatedAt,
 		},
 	})
 }
@@ -466,14 +609,34 @@ func (h *AuthHandler) CreateAdmin(c *gin.Context) {
 		}
 	}
 
+	if req.MSISDN != "" {
+		existingUser, err = h.userRepo.FindByMSISDN(ctx, req.MSISDN)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
+			return
+		}
+		if existingUser != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "MSISDN already registered"})
+			return
+		}
+	}
+
 	// Create admin user
+	now := time.Now()
 	user := &models.User{
-		Email:     req.Email,
-		Phone:     req.Phone,
-		Password:  req.Password,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Role:      "admin", // Set role as admin
+		Email:        req.Email,
+		Phone:        req.Phone,
+		Password:     req.Password,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
+		Role:         "admin", // Set role as admin
+		MSISDN:       req.MSISDN,
+		OptInStatus:  true,
+		OptInDate:    now,
+		OptInChannel: req.OptInChannel,
+		Points:       0,
+		IsBlacklisted: false,
+		LastActivity: now,
 	}
 
 	if err := h.userRepo.Create(ctx, user); err != nil {
@@ -492,13 +655,20 @@ func (h *AuthHandler) CreateAdmin(c *gin.Context) {
 	c.JSON(http.StatusCreated, models.LoginResponse{
 		Token: token,
 		User: models.UserResponse{
-			ID:        user.ID.Hex(),
-			Email:     user.Email,
-			Phone:     user.Phone,
-			FirstName: user.FirstName,
-			LastName:  user.LastName,
-			Role:      user.Role,
-			CreatedAt: user.CreatedAt,
+			ID:           user.ID.Hex(),
+			Email:        user.Email,
+			Phone:        user.Phone,
+			FirstName:    user.FirstName,
+			LastName:     user.LastName,
+			Role:         user.Role,
+			MSISDN:       user.MSISDN,
+			OptInStatus:  user.OptInStatus,
+			OptInDate:    user.OptInDate,
+			OptInChannel: user.OptInChannel,
+			Points:       user.Points,
+			IsBlacklisted: user.IsBlacklisted,
+			LastActivity: user.LastActivity,
+			CreatedAt:    user.CreatedAt,
 		},
 	})
 }
@@ -531,123 +701,6 @@ func (h *AuthHandler) generateToken(user *models.User) (string, error) {
 	}
 
 	return tokenString, nil
-}
-EOF
-
-# Create user handler
-echo "Creating user handler"
-cat > internal/handlers/user_handler.go << 'EOF'
-package handlers
-
-import (
-	"context"
-	"net/http"
-
-	"github.com/bridgetunes/mtn-backend/internal/models"
-	"github.com/bridgetunes/mtn-backend/internal/repositories/mongodb"
-	"github.com/gin-gonic/gin"
-)
-
-// UserHandler handles user requests
-type UserHandler struct {
-	userRepo *mongodb.UserRepository
-}
-
-// NewUserHandler creates a new user handler
-func NewUserHandler(userRepo *mongodb.UserRepository) *UserHandler {
-	return &UserHandler{
-		userRepo: userRepo,
-	}
-}
-
-// GetUser gets a user by ID
-func (h *UserHandler) GetUser(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID is required"})
-		return
-	}
-
-	// Get user from repository
-	ctx := context.Background()
-	user, err := h.userRepo.FindByID(ctx, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
-		return
-	}
-
-	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	// Return user response
-	c.JSON(http.StatusOK, models.UserResponse{
-		ID:        user.ID.Hex(),
-		Email:     user.Email,
-		Phone:     user.Phone,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Role:      user.Role,
-		CreatedAt: user.CreatedAt,
-	})
-}
-
-// UpdateUser updates a user
-func (h *UserHandler) UpdateUser(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID is required"})
-		return
-	}
-
-	// Get user from repository
-	ctx := context.Background()
-	user, err := h.userRepo.FindByID(ctx, id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
-		return
-	}
-
-	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	// Bind request body
-	var req struct {
-		FirstName string `json:"firstName"`
-		LastName  string `json:"lastName"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Update user
-	if req.FirstName != "" {
-		user.FirstName = req.FirstName
-	}
-	if req.LastName != "" {
-		user.LastName = req.LastName
-	}
-
-	// Save user
-	if err := h.userRepo.Update(ctx, user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
-		return
-	}
-
-	// Return user response
-	c.JSON(http.StatusOK, models.UserResponse{
-		ID:        user.ID.Hex(),
-		Email:     user.Email,
-		Phone:     user.Phone,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Role:      user.Role,
-		CreatedAt: user.CreatedAt,
-	})
 }
 EOF
 
@@ -772,81 +825,6 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 EOF
 
-# Create MongoDB client
-echo "Creating MongoDB client"
-mkdir -p pkg/mongodb
-
-cat > pkg/mongodb/client.go << 'EOF'
-package mongodb
-
-import (
-	"context"
-	"os"
-	"time"
-
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-)
-
-// Client wraps the MongoDB client
-type Client struct {
-	client   *mongo.Client
-	database *mongo.Database
-}
-
-// NewClient creates a new MongoDB client
-func NewClient() (*Client, error) {
-	// Get MongoDB URI from environment
-	uri := os.Getenv("MONGODB_URI")
-	if uri == "" {
-		uri = "mongodb+srv://fsanus20111:wXVTvRfaCtcd5W7t@cluster0.llhkakp.mongodb.net/bridgetunes?retryWrites=true&w=majority&appName=Cluster0"
-	}
-
-	// Get database name from environment
-	dbName := os.Getenv("MONGODB_DATABASE")
-	if dbName == "" {
-		dbName = "bridgetunes"
-	}
-
-	// Create client
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	if err != nil {
-		return nil, err
-	}
-
-	// Ping database
-	if err := client.Ping(ctx, nil); err != nil {
-		return nil, err
-	}
-
-	// Return client
-	return &Client{
-		client:   client,
-		database: client.Database(dbName),
-	}, nil
-}
-
-// Close closes the MongoDB client
-func (c *Client) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return c.client.Disconnect(ctx)
-}
-
-// Database returns the MongoDB database
-func (c *Client) Database() *mongo.Database {
-	return c.database
-}
-
-// Client returns the MongoDB client
-func (c *Client) Client() *mongo.Client {
-	return c.client
-}
-EOF
-
 # Create main.go with authentication routes
 echo "Creating main.go with authentication routes"
 mkdir -p cmd/api
@@ -885,7 +863,6 @@ func main() {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(userRepo)
-	userHandler := handlers.NewUserHandler(userRepo)
 
 	// Initialize router
 	router := gin.Default()
@@ -911,8 +888,14 @@ func main() {
 			// User routes
 			users := protected.Group("/users")
 			{
-				users.GET("/:id", userHandler.GetUser)
-				users.PUT("/:id", userHandler.UpdateUser)
+				users.GET("/:id", func(c *gin.Context) {
+					id := c.Param("id")
+					c.JSON(200, gin.H{"message": "Get user endpoint", "id": id})
+				})
+				users.PUT("/:id", func(c *gin.Context) {
+					id := c.Param("id")
+					c.JSON(200, gin.H{"message": "Update user endpoint", "id": id})
+				})
 			}
 
 			// Admin routes
