@@ -326,6 +326,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -342,7 +343,7 @@ func NewAuthHandler(db *mongo.Database) *AuthHandler {
 	// Create index on email for faster lookups and to prevent duplicates
 	indexModel := mongo.IndexModel{
 		Keys:    bson.D{{Key: "email", Value: 1}},
-		Options: mongo.options.Index().SetUnique(true),
+		Options: options.Index().SetUnique(true),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -358,7 +359,7 @@ func NewAuthHandler(db *mongo.Database) *AuthHandler {
 	// Create index on phone for faster lookups and to prevent duplicates
 	phoneIndexModel := mongo.IndexModel{
 		Keys:    bson.D{{Key: "phone", Value: 1}},
-		Options: mongo.options.Index().SetUnique(true),
+		Options: options.Index().SetUnique(true),
 	}
 
 	_, err = collection.Indexes().CreateOne(ctx, phoneIndexModel)
@@ -371,7 +372,7 @@ func NewAuthHandler(db *mongo.Database) *AuthHandler {
 	// Create index on MSISDN for faster lookups and to prevent duplicates
 	msisdnIndexModel := mongo.IndexModel{
 		Keys:    bson.D{{Key: "msisdn", Value: 1}},
-		Options: mongo.options.Index().SetUnique(true),
+		Options: options.Index().SetUnique(true),
 	}
 
 	_, err = collection.Indexes().CreateOne(ctx, msisdnIndexModel)
