@@ -36,6 +36,18 @@ sed -i '/time/d' internal/handlers/notification_handler.go || true
 echo "Fixing unused imports in internal/handlers/user_handler.go"
 sed -i '/time/d' internal/handlers/user_handler.go || true
 
+# Fix the time.Now() assignment in user_service.go
+echo "Fixing time.Now() assignment in user_service.go"
+if [ -f internal/services/user_service.go ]; then
+  # Create a backup of the original file
+  cp internal/services/user_service.go internal/services/user_service.go.bak
+  
+  # Replace direct time.Now() assignment with pointer conversion
+  sed -i 's/user.OptOutDate = time.Now()/now := time.Now()\n\tuser.OptOutDate = \&now/g' internal/services/user_service.go
+  
+  echo "Modified user_service.go to convert time.Now() to a pointer"
+fi
+
 # Create models directory if it doesn't exist
 mkdir -p internal/models
 
