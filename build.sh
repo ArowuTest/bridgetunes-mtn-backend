@@ -16,7 +16,6 @@ go get go.mongodb.org/mongo-driver/mongo
 go get go.mongodb.org/mongo-driver/bson
 go get go.mongodb.org/mongo-driver/mongo/options
 go get golang.org/x/crypto/bcrypt
-go get github.com/gin-contrib/cors  # Explicitly install the cors package
 
 # Run go mod tidy to clean up dependencies
 go mod tidy
@@ -37,6 +36,13 @@ sed -i '/time/d' internal/handlers/notification_handler.go || true
 echo "Fixing unused imports in internal/handlers/user_handler.go"
 sed -i '/time/d' internal/handlers/user_handler.go || true
 
+# Create necessary directories
+echo "Creating necessary directories"
+mkdir -p internal/handlers
+mkdir -p internal/models
+mkdir -p internal/database
+mkdir -p cmd/api
+
 # Create a backup of main.go if it exists
 if [ -f cmd/api/main.go ]; then
   cp cmd/api/main.go cmd/api/main.go.bak
@@ -44,9 +50,6 @@ fi
 
 # Create CSV upload implementation
 echo "Creating CSV upload implementation"
-mkdir -p internal/handlers
-mkdir -p internal/models
-mkdir -p internal/database  # Create database directory
 
 # Create transaction model
 cat > internal/models/transaction.go << 'EOF'
@@ -220,7 +223,7 @@ func (h *TransactionHandler) UploadCSV(c *gin.Context) {
 			continue
 		}
 
-		// Calculate points based on the correct points allocation logic
+		// Calculate points based on the correct points allocation logic (REQFUNC025)
 		points := calculatePoints(amount)
 
 		// Create transaction
@@ -345,10 +348,7 @@ func Connect() (*mongo.Client, *mongo.Database, error) {
 }
 EOF
 
-# Create cmd/api directory if it doesn't exist
-mkdir -p cmd/api
-
-# Update main.go to include CSV upload endpoint
+# Update main.go to include CSV upload endpoint with built-in CORS middleware
 cat > cmd/api/main.go << 'EOF'
 package main
 
@@ -358,7 +358,6 @@ import (
 
 	"github.com/bridgetunes/mtn-backend/internal/database"
 	"github.com/bridgetunes/mtn-backend/internal/handlers"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -387,13 +386,20 @@ func main() {
 	// Initialize router
 	router := gin.Default()
 
-	// Apply CORS middleware
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization"},
-		AllowCredentials: true,
-	}))
+	// Apply built-in CORS middleware
+	router.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
 
 	// Define routes
 	api := router.Group("/api")
