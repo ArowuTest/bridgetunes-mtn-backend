@@ -26,7 +26,15 @@ sed -i '/encoding\/json/d' pkg/mtnapi/client.go || true
 echo "Fixing unused imports in internal/middleware/middleware.go"
 sed -i '/context/d' internal/middleware/middleware.go || true
 
+echo "Fixing unused imports in internal/handlers/draw_handler.go"
+sed -i '/github.com\/bridgetunes\/mtn-backend\/internal\/models/d' internal/handlers/draw_handler.go || true
+
+echo "Fixing unused imports in internal/handlers/notification_handler.go"
+sed -i '/time/d' internal/handlers/notification_handler.go || true
+
+echo "Fixing unused imports in internal/handlers/user_handler.go"
+sed -i '/time/d' internal/handlers/user_handler.go || true
+
 # Build the application
 cd ./cmd/api
 go build -o ../../app .
-
