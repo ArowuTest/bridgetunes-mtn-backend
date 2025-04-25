@@ -46,6 +46,7 @@ fi
 echo "Creating CSV upload implementation"
 mkdir -p internal/handlers
 mkdir -p internal/models
+mkdir -p internal/database  # Create database directory
 
 # Create transaction model
 cat > internal/models/transaction.go << 'EOF'
@@ -343,6 +344,9 @@ func Connect() (*mongo.Client, *mongo.Database, error) {
 	return client, client.Database(dbName), nil
 }
 EOF
+
+# Create cmd/api directory if it doesn't exist
+mkdir -p cmd/api
 
 # Update main.go to include CSV upload endpoint
 cat > cmd/api/main.go << 'EOF'
