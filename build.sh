@@ -16,7 +16,7 @@ go get go.mongodb.org/mongo-driver/mongo
 go get go.mongodb.org/mongo-driver/bson
 go get go.mongodb.org/mongo-driver/mongo/options
 go get golang.org/x/crypto/bcrypt
-go get github.com/gin-contrib/cors
+go get github.com/gin-contrib/cors  # Explicitly install the cors package
 
 # Run go mod tidy to clean up dependencies
 go mod tidy
