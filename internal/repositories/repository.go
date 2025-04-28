@@ -160,3 +160,4 @@ type BlacklistRepository interface {
 // --- NOTE: You might need to add implementations for other methods in the generic Repository ---
 // --- or ensure your specific repository implementations match these interfaces. ---
 
+
