@@ -72,3 +72,4 @@ type PrizeStructure struct {
 	Count    int     `bson:"count" json:"count"` // Number of prizes for this category (e.g., 7 for consolation)
 }
 
+
