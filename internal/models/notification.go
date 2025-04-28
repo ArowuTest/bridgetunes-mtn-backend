@@ -21,3 +21,34 @@ type Notification struct {
 	CreatedAt    time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt    time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
+
+// --- ADDED CODE START ---
+// Campaign represents a notification campaign
+type Campaign struct {
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Name        string             `bson:"name" json:"name" binding:"required"`
+	Description string             `bson:"description,omitempty" json:"description,omitempty"`
+	TemplateID  primitive.ObjectID `bson:"templateId" json:"templateId" binding:"required"`
+	// Add other relevant fields based on your requirements, e.g.:
+	// TargetSegmentID primitive.ObjectID `bson:"targetSegmentId,omitempty" json:"targetSegmentId,omitempty"`
+	// ScheduleType string             `bson:"scheduleType" json:"scheduleType"` // e.g., IMMEDIATE, SCHEDULED
+	// ScheduledTime time.Time          `bson:"scheduledTime,omitempty" json:"scheduledTime,omitempty"`
+	Status      string             `bson:"status" json:"status"` // e.g., DRAFT, SCHEDULED, EXECUTING, COMPLETED, FAILED
+	CreatedAt   time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt   time.Time          `bson:"updatedAt" json:"updatedAt"`
+	ExecutedAt  time.Time          `bson:"executedAt,omitempty" json:"executedAt,omitempty"`
+}
+
+// Template represents a notification message template
+type Template struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Name      string             `bson:"name" json:"name" binding:"required"`
+	Content   string             `bson:"content" json:"content" binding:"required"`
+	Type      string             `bson:"type" json:"type" binding:"required"` // SMS, PUSH, EMAIL
+	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt time.Time          `bson:"updatedAt" json:"updatedAt"`
+}
+
+// --- ADDED CODE END ---
+
+
