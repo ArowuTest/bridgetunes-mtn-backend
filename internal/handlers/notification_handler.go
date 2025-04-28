@@ -176,6 +176,24 @@ func (h *NotificationHandler) ExecuteCampaign(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Campaign executed successfully"})
 }
 
+// --- ADDED CODE START ---
+// GetAllCampaigns handles GET /notifications/campaigns
+func (h *NotificationHandler) GetAllCampaigns(c *gin.Context) {
+	// Parse pagination parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	// Get campaigns from service
+	campaigns, err := h.notificationService.GetAllCampaigns(c, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get campaigns"})
+		return
+	}
+
+	c.JSON(http.StatusOK, campaigns)
+}
+// --- ADDED CODE END ---
+
 // CreateTemplate handles POST /notifications/templates
 func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 	// Parse request body
