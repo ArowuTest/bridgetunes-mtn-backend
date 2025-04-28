@@ -5,8 +5,63 @@ import (
 	"time"
 
 	"github.com/bridgetunes/mtn-backend/internal/models"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// --- NOTE: This file assumes a generic Repository struct implements the interfaces below. ---
+// --- You may need to adapt the GetAllCampaigns implementation to your specific structure. ---
+
+// Repository struct (assuming a generic implementation)
+type Repository struct {
+	// Assuming db is your *mongo.Database instance
+	// You might have separate repository structs for each entity
+	// e.g., userRepo, topupRepo, etc.
+	// Adjust the GetAllCampaigns method below accordingly.
+	 db *mongo.Database
+}
+
+// NewRepository creates a new generic repository (example constructor)
+func NewRepository(db *mongo.Database) *Repository {
+	return &Repository{db: db}
+}
+
+// --- ADDED CODE START ---
+// GetAllCampaigns retrieves all campaigns with pagination
+// This assumes the generic Repository struct implements CampaignRepository
+func (r *Repository) GetAllCampaigns(ctx context.Context, page, limit int) ([]models.Campaign, error) {
+	var campaigns []models.Campaign
+	collection := r.db.Collection("campaigns") // Assuming collection name is "campaigns"
+
+	findOptions := options.Find()
+	findOptions.SetSkip(int64((page - 1) * limit))
+	findOptions.SetLimit(int64(limit))
+	findOptions.SetSort(bson.D{{Key: "createdAt", Value: -1}}) // Sort by creation date descending
+
+	cursor, err := collection.Find(ctx, bson.M{}, findOptions)
+	 if err != nil {
+	 	return nil, err // Return error if Find fails
+	 }
+	defer cursor.Close(ctx)
+
+	// Decode documents
+	 err = cursor.All(ctx, &campaigns)
+	 if err != nil {
+	 	return nil, err // Return error if decoding fails
+	 }
+
+	// Ensure an empty slice is returned instead of nil if no campaigns found
+	 if campaigns == nil {
+	 	campaigns = []models.Campaign{}
+	 }
+
+	return campaigns, nil
+}
+// --- ADDED CODE END ---
+
+// --- Existing Interfaces (copied from original for context) ---
 
 // UserRepository defines the interface for user data access
 type UserRepository interface {
@@ -84,7 +139,7 @@ type TemplateRepository interface {
 type CampaignRepository interface {
 	FindByID(ctx context.Context, id primitive.ObjectID) (*models.Campaign, error)
 	FindByStatus(ctx context.Context, status string, page, limit int) ([]*models.Campaign, error)
-	FindAll(ctx context.Context, page, limit int) ([]*models.Campaign, error)
+	FindAll(ctx context.Context, page, limit int) ([]models.Campaign, error) // Changed return type to match implementation
 	Create(ctx context.Context, campaign *models.Campaign) error
 	Update(ctx context.Context, campaign *models.Campaign) error
 	Delete(ctx context.Context, id primitive.ObjectID) error
@@ -101,3 +156,7 @@ type BlacklistRepository interface {
 	Delete(ctx context.Context, id primitive.ObjectID) error
 	Count(ctx context.Context) (int64, error)
 }
+
+// --- NOTE: You might need to add implementations for other methods in the generic Repository ---
+// --- or ensure your specific repository implementations match these interfaces. ---
+
