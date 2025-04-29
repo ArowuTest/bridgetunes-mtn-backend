@@ -131,13 +131,15 @@ func (h *DrawHandler) GetPrizeStructure(c *gin.Context) {
 	 c.JSON(http.StatusOK, structure) 
 }
 
+// Define the request structure outside the function
+type UpdatePrizeStructureRequest struct {
+	DrawType  string                 `json:"draw_type" binding:"required"`
+	Structure []models.PrizeStructure `json:"structure" binding:"required"`
+}
+
 // UpdatePrizeStructure handles PUT /draws/prize-structure
 func (h *DrawHandler) UpdatePrizeStructure(c *gin.Context) {
-	 var request struct {
-		 DrawType  string                 `json:"draw_type" binding:"required"`
-		 // Ensure models.PrizeStructure is recognized from the import
-		 Structure []models.PrizeStructure `json:"structure" binding:"required"` // This is line 160
-	 }
+	 var request UpdatePrizeStructureRequest // Use the named struct type
 	 if err := c.ShouldBindJSON(&request); err != nil {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()  })
 		 return
@@ -222,4 +224,5 @@ func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 	 }
 	 c.JSON(http.StatusOK, history) 
 }
+
 
