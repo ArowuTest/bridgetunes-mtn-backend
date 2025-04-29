@@ -6,6 +6,9 @@ WORKDIR /app
 # Copy go.mod and go.sum files first to leverage Docker cache
 COPY go.mod go.sum ./
 
+# --- NEW: Remove potential cached modules before downloading ---
+RUN rm -rf /go/pkg/mod
+
 # Download dependencies
 # Using go mod download & verify ensures dependencies are fetched and consistent
 RUN go mod download && go mod verify
@@ -41,4 +44,3 @@ EXPOSE 8080
 # Define the command to run the application
 # Use the binary name specified in the build stage
 CMD ["./bridgetunes-api"]
-
