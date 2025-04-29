@@ -10,39 +10,28 @@ import (
 
 // DrawService defines the interface for draw-related operations
 type DrawService interface {
-	// GetDrawConfig retrieves the configuration for a draw based on the date
-	GetDrawConfig(ctx context.Context, date time.Time) (*models.DrawConfigResponse, error)
-
-	// GetPrizeStructure retrieves the prize structure for a given draw type (DAILY or WEEKLY)
+	GetDrawConfig(ctx context.Context, date time.Time) (map[string]interface{}, error) // Use map[string]interface{}
 	GetPrizeStructure(ctx context.Context, drawType string) ([]models.PrizeStructure, error)
-
-	// UpdatePrizeStructure updates the prize structure for a given draw type
-	UpdatePrizeStructure(ctx context.Context, drawType string, prizes []models.PrizeStructure) error
-
-	// ScheduleDraw schedules a new draw
-	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefault bool) (*models.Draw, error)
-
-	// ExecuteDraw executes a scheduled draw
+	UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.PrizeStructure) error
+	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error)
 	ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error)
-
-	// GetDrawByID retrieves a draw by its ID
 	GetDrawByID(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error)
-
-	// GetWinnersByDrawID retrieves the winners for a specific draw
 	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
-
-	// GetDraws retrieves a list of draws based on optional filters
 	GetDraws(ctx context.Context, startDate, endDate time.Time) ([]*models.Draw, error)
-
-	// GetJackpotHistory retrieves the jackpot history within a date range
-	GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]*models.JackpotHistoryEntry, error)
+	GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) // Use []map[string]interface{}
 }
 
-// --- Other Service Interfaces (Add as needed) ---
+// UserService defines the interface for user-related operations (Add other service interfaces as needed)
+type UserService interface {
+	// Define user service methods here
+}
 
-// UserService defines the interface for user-related operations
-// type UserService interface { ... }
+// TopupService defines the interface for topup-related operations
+type TopupService interface {
+	// Define topup service methods here
+}
 
 // NotificationService defines the interface for notification-related operations
-// type NotificationService interface { ... }
-
+type NotificationService interface {
+	// Define notification service methods here
+}
