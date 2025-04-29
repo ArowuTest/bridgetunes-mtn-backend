@@ -70,6 +70,7 @@ type UserRepository interface {
 	FindAll(ctx context.Context, page, limit int) ([]*models.User, error)
 	FindByOptInStatus(ctx context.Context, optInStatus bool, page, limit int) ([]*models.User, error)
 	FindByEligibleDigits(ctx context.Context, digits []int, optInStatus bool) ([]*models.User, error)
+	FindByRechargeTimeRange(ctx context.Context, start, end time.Time) ([]*models.User, error) // Added this method
 	Create(ctx context.Context, user *models.User) error
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id primitive.ObjectID) error
