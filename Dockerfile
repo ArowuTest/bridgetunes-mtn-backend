@@ -1,27 +1,32 @@
-FROM golang:1.19-alpine
+FROM golang:1.19-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-RUN apk add --no-cache git
+# Copy go.mod and go.sum files
+COPY go.mod go.sum ./
 
-# Copy go.mod and go.sum
-COPY go.mod ./
-
-# Download all dependencies and verify
-RUN go mod download && go mod verify
+# Download dependencies
+RUN go mod download
 
 # Copy the source code
 COPY . .
 
-# Force Go modules mode and run go mod tidy to ensure all dependencies are properly listed
-RUN go mod tidy
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bridgetunes-api ./cmd/api
 
-# Build the application with explicit dependency resolution
-RUN cd ./cmd/api && GO111MODULE=on CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ../../main .
+# Use a smaller image for the final container
+FROM alpine:latest
+
+WORKDIR /app
+
+# Install necessary packages
+RUN apk --no-cache add ca-certificates tzdata
+
+# Copy the binary from the builder stage
+COPY --from=builder /app/bridgetunes-api .
 
 # Expose port
 EXPOSE 8080
 
 # Run the application
-CMD ["./main"]
+CMD ["./bridgetunes-api"]
