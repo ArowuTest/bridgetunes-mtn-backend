@@ -38,24 +38,6 @@ type RolloverInfo struct {
 	Reason       string             `bson:"reason" json:"reason"` // e.g., "INVALID_WINNER"
 }
 
-// Winner represents a winner in a draw
-type Winner struct {
-	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	MSISDN         string             `bson:"msisdn" json:"msisdn"`
-	MaskedMSISDN   string             `bson:"maskedMsisdn" json:"maskedMsisdn"` // e.g., "080*****78"
-	DrawID         primitive.ObjectID `bson:"drawId" json:"drawId"`
-	PrizeCategory  string             `bson:"prizeCategory" json:"prizeCategory"`
-	PrizeAmount    float64            `bson:"prizeAmount" json:"prizeAmount"`
-	IsOptedIn      bool               `bson:"isOptedIn" json:"isOptedIn"` // User's opt-in status at time of draw
-	IsValid        bool               `bson:"isValid" json:"isValid"` // Whether the win is valid (e.g., opted-in for jackpot)
-	Points         int                `bson:"points" json:"points"` // User's points at time of draw
-	WinDate        time.Time          `bson:"winDate" json:"winDate"`
-	ClaimStatus    string             `bson:"claimStatus" json:"claimStatus"` // PENDING, CLAIMED, EXPIRED
-	ClaimDate      *time.Time         `bson:"claimDate,omitempty" json:"claimDate,omitempty"`
-	CreatedAt      time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt      time.Time          `bson:"updatedAt" json:"updatedAt"`
-}
-
 // SystemConfig stores system configuration values
 type SystemConfig struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
@@ -71,4 +53,8 @@ type PrizeStructure struct {
 	Amount   float64 `bson:"amount" json:"amount"`
 	Count    int     `bson:"count" json:"count"` // Number of prizes for this category (e.g., 7 for consolation)
 }
+
+// NOTE: The Winner struct definition has been removed from this file.
+// It should be defined in internal/models/winner.go
+
 
