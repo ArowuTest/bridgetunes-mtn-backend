@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"math/rand" // Added import
 	"time"
 
 	"github.com/bridgetunes/mtn-backend/internal/models"
