@@ -269,3 +269,4 @@ func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 	 }
 	 c.JSON(http.StatusOK, history) 
 }
+
