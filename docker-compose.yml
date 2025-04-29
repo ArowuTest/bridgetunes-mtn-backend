@@ -1,27 +1,54 @@
-version: '3'
+version: '3.8'
 
 services:
-  api:
-    build: .
+  # MongoDB service
+  mongodb:
+    image: mongo:latest
+    container_name: bridgetunes-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - bridgetunes-network
+    restart: unless-stopped
+
+  # Backend API service
+  backend:
+    build:
+      context: ./bridgetunes-mtn-backend
+      dockerfile: Dockerfile
+    container_name: bridgetunes-backend
     ports:
       - "8080:8080"
+    depends_on:
+      - mongodb
     environment:
-      - SERVER_PORT=8080
-      - SERVER_MODE=debug
-      - SERVER_ALLOWED_HOSTS=*
-      - MONGODB_URI=${MONGODB_URI}
-      - MONGODB_DATABASE=${MONGODB_DATABASE}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
-      - MTN_BASE_URL=${MTN_BASE_URL}
-      - MTN_API_KEY=${MTN_API_KEY}
-      - MTN_API_SECRET=${MTN_API_SECRET}
-      - MTN_MOCK_API=${MTN_MOCK_API}
-      - SMS_DEFAULT_GATEWAY=${SMS_DEFAULT_GATEWAY}
-      - SMS_MOCK_SMS=${SMS_MOCK_SMS}
-      - SMS_MTN_BASE_URL=${SMS_MTN_BASE_URL}
-      - SMS_MTN_API_KEY=${SMS_MTN_API_KEY}
-      - SMS_MTN_API_SECRET=${SMS_MTN_API_SECRET}
-      - SMS_KODOBE_BASE_URL=${SMS_KODOBE_BASE_URL}
-      - SMS_KODOBE_API_KEY=${SMS_KODOBE_API_KEY}
-    restart: always
+      - MONGO_URI=mongodb://mongodb:27017
+      - DB_NAME=bridgetunes
+    networks:
+      - bridgetunes-network
+    restart: unless-stopped
+
+  # Frontend service
+  frontend:
+    build:
+      context: ./bridgetunes-fixed-imports
+      dockerfile: Dockerfile
+    container_name: bridgetunes-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080/api/v1
+    networks:
+      - bridgetunes-network
+    restart: unless-stopped
+
+networks:
+  bridgetunes-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
