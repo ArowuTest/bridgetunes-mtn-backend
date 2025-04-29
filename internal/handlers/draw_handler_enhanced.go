@@ -2,14 +2,14 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
+	// "strconv" // Removed unused import
 	"time"
 
 	"github.com/bridgetunes/mtn-backend/internal/models"
 	"github.com/bridgetunes/mtn-backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-) 
+)
 
 // DrawHandlerEnhanced handles enhanced draw-related HTTP requests
 type DrawHandlerEnhanced struct {
@@ -36,11 +36,11 @@ func (h *DrawHandlerEnhanced) GetDrawConfig(c *gin.Context) {
 	// Get draw config from service
 	 config, err := h.drawService.GetDrawConfig(c, date)
 	 if err != nil {
-		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draw configuration: " + err.Error() })
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draw configuration: " + err.Error()})
 		 return
 	 }
 
-	 c.JSON(http.StatusOK, config) 
+	 c.JSON(http.StatusOK, config)
 }
 
 // GetPrizeStructure handles GET /draws/prize-structure
@@ -48,18 +48,18 @@ func (h *DrawHandlerEnhanced) GetPrizeStructure(c *gin.Context) {
 	// Get draw type from query parameter
 	 drawType := c.Query("draw_type")
 	 if drawType != "DAILY" && drawType != "WEEKLY" {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw type (DAILY or WEEKLY) "})
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw type (DAILY or WEEKLY)"})
 		 return
 	 }
 
 	// Get prize structure from service
 	 structure, err := h.drawService.GetPrizeStructure(c, drawType)
 	 if err != nil {
-		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get prize structure: " + err.Error() })
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get prize structure: " + err.Error()})
 		 return
 	 }
 
-	 c.JSON(http.StatusOK, structure) 
+	 c.JSON(http.StatusOK, structure)
 }
 
 // UpdatePrizeStructure handles PUT /draws/prize-structure
@@ -70,24 +70,24 @@ func (h *DrawHandlerEnhanced) UpdatePrizeStructure(c *gin.Context) {
 		 Prizes []models.PrizeStructure `json:"prizes" binding:"required"`
 	 }
 	 if err := c.ShouldBindJSON(&request); err != nil {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error() })
+		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		 return
 	 }
 
 	// Validate draw type
 	 if request.DrawType != "DAILY" && request.DrawType != "WEEKLY" {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw type (DAILY or WEEKLY) "})
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw type (DAILY or WEEKLY)"})
 		 return
 	 }
 
 	// Update prize structure
 	 err := h.drawService.UpdatePrizeStructure(c, request.DrawType, request.Prizes)
 	 if err != nil {
-		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prize structure: " + err.Error() })
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prize structure: " + err.Error()})
 		 return
 	 }
 
-	 c.JSON(http.StatusOK, gin.H{"message": "Prize structure updated successfully"}) 
+	 c.JSON(http.StatusOK, gin.H{"message": "Prize structure updated successfully"})
 }
 
 // ScheduleDraw handles POST /draws
@@ -100,37 +100,37 @@ func (h *DrawHandlerEnhanced) ScheduleDraw(c *gin.Context) {
 		 UseDefault     bool     `json:"use_default"`
 	 }
 	 if err := c.ShouldBindJSON(&request); err != nil {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error() })
+		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		 return
 	 }
 
 	// Parse draw date
 	 drawDate, err := time.Parse("2006-01-02", request.DrawDate)
 	 if err != nil {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw date format (YYYY-MM-DD) "})
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw date format (YYYY-MM-DD)"})
 		 return
 	 }
 
 	// Validate draw type
 	 if request.DrawType != "DAILY" && request.DrawType != "WEEKLY" {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw type (DAILY or WEEKLY) "})
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw type (DAILY or WEEKLY)"})
 		 return
 	 }
 
 	// Validate eligible digits if not using default
 	 if !request.UseDefault && len(request.EligibleDigits) == 0 {
-	 	 c.JSON(http.StatusBadRequest, gin.H{"error": "eligible_digits cannot be empty if use_default is false"}) 
+	 	 c.JSON(http.StatusBadRequest, gin.H{"error": "eligible_digits cannot be empty if use_default is false"})
 	 	 return
 	 }
 
 	// Schedule draw - Pass arguments in correct order
 	 draw, err := h.drawService.ScheduleDraw(c, drawDate, request.DrawType, request.EligibleDigits, request.UseDefault)
 	 if err != nil {
-		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to schedule draw: " + err.Error() })
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to schedule draw: " + err.Error()})
 		 return
 	 }
 
-	 c.JSON(http.StatusCreated, draw) 
+	 c.JSON(http.StatusCreated, draw)
 }
 
 // ExecuteDraw handles POST /draws/:id/execute
@@ -139,18 +139,18 @@ func (h *DrawHandlerEnhanced) ExecuteDraw(c *gin.Context) {
 	 drawIDStr := c.Param("id")
 	 drawID, err := primitive.ObjectIDFromHex(drawIDStr)
 	 if err != nil {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"}) 
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		 return
 	 }
 
 	// Execute draw - Capture both return values
 	 _, err = h.drawService.ExecuteDraw(c, drawID) // Capture draw object if needed later, otherwise use _
 	 if err != nil {
-		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute draw: " + err.Error() })
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute draw: " + err.Error()})
 		 return
 	 }
 
-	 c.JSON(http.StatusOK, gin.H{"message": "Draw executed successfully"}) 
+	 c.JSON(http.StatusOK, gin.H{"message": "Draw executed successfully"})
 }
 
 // GetDrawByID handles GET /draws/:id
@@ -159,18 +159,17 @@ func (h *DrawHandlerEnhanced) GetDrawByID(c *gin.Context) {
 	 drawIDStr := c.Param("id") // Renamed to avoid conflict if uncommenting below
 	 drawID, err := primitive.ObjectIDFromHex(drawIDStr)
 	 if err != nil {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"}) 
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		 return
 	 }
 
 	// Get draw from service
 	 draw, err := h.drawService.GetDrawByID(c, drawID) // Assuming DrawService has GetDrawByID
 	 if err != nil {
-	 	 c.JSON(http.StatusNotFound, gin.H{"error": "Draw not found: " + err.Error() })
+	 	 c.JSON(http.StatusNotFound, gin.H{"error": "Draw not found: " + err.Error()})
 	 	 return
 	 }
-	 c.JSON(http.StatusOK, draw) 
-	// c.JSON(http.StatusNotImplemented, gin.H{"error": "GetDrawByID not fully implemented in enhanced handler yet"}) 
+	 c.JSON(http.StatusOK, draw)
 }
 
 // GetDrawWinners handles GET /draws/:id/winners
@@ -179,32 +178,24 @@ func (h *DrawHandlerEnhanced) GetDrawWinners(c *gin.Context) {
 	 drawIDStr := c.Param("id") // Renamed to avoid conflict if uncommenting below
 	 drawID, err := primitive.ObjectIDFromHex(drawIDStr)
 	 if err != nil {
-		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"}) 
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		 return
 	 }
-
-	// Get query parameters (Removed unused variables)
-	// category := c.Query("category")
-	// maskMSISDN, _ := strconv.ParseBool(c.DefaultQuery("mask_msisdn", "true"))
 
 	// Get winners from service
 	 winners, err := h.drawService.GetWinnersByDrawID(c, drawID) // Assuming DrawService has GetWinnersByDrawID
 	 if err != nil {
-	 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get winners: " + err.Error() })
+	 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get winners: " + err.Error()})
 	 	 return
 	 }
-	 c.JSON(http.StatusOK, winners) 
-	// c.JSON(http.StatusNotImplemented, gin.H{"error": "GetDrawWinners not fully implemented in enhanced handler yet"}) 
+	 c.JSON(http.StatusOK, winners)
 }
 
 // GetDraws handles GET /draws
 func (h *DrawHandlerEnhanced) GetDraws(c *gin.Context) {
-	// Parse query parameters (Removed unused variables)
-	// status := c.Query("status")
+	// Parse query parameters
 	 startDateStr := c.Query("start_date")
 	 endDateStr := c.Query("end_date")
-	// page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	// limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
 	// Parse dates
 	 var startDate, endDate time.Time
@@ -212,14 +203,14 @@ func (h *DrawHandlerEnhanced) GetDraws(c *gin.Context) {
 	 if startDateStr != "" {
 		 startDate, err = time.Parse("2006-01-02", startDateStr)
 		 if err != nil {
-			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start date format (YYYY-MM-DD) "})
+			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start date format (YYYY-MM-DD)"})
 			 return
 		 }
 	 }
 	 if endDateStr != "" {
 		 endDate, err = time.Parse("2006-01-02", endDateStr)
 		 if err != nil {
-			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end date format (YYYY-MM-DD) "})
+			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end date format (YYYY-MM-DD)"})
 			 return
 		 }
 		 // Add one day to end date to include the end date in the range
@@ -229,11 +220,10 @@ func (h *DrawHandlerEnhanced) GetDraws(c *gin.Context) {
 	// Get draws from service
 	 draws, err := h.drawService.GetDraws(c, startDate, endDate) // Assuming DrawService has GetDraws
 	 if err != nil {
-	 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draws: " + err.Error() })
+	 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draws: " + err.Error()})
 	 	 return
 	 }
-	 c.JSON(http.StatusOK, draws) 
-	// c.JSON(http.StatusNotImplemented, gin.H{"error": "GetDraws not fully implemented in enhanced handler yet"}) 
+	 c.JSON(http.StatusOK, draws)
 }
 
 // GetJackpotHistory handles GET /draws/jackpot-history
@@ -248,14 +238,14 @@ func (h *DrawHandlerEnhanced) GetJackpotHistory(c *gin.Context) {
 	 if startDateStr != "" {
 		 startDate, err = time.Parse("2006-01-02", startDateStr)
 		 if err != nil {
-			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start date format (YYYY-MM-DD) "})
+			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start date format (YYYY-MM-DD)"})
 			 return
 		 }
 	 }
 	 if endDateStr != "" {
 		 endDate, err = time.Parse("2006-01-02", endDateStr)
 		 if err != nil {
-			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end date format (YYYY-MM-DD) "})
+			 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end date format (YYYY-MM-DD)"})
 			 return
 		 }
 		 // Add one day to end date to include the end date in the range
@@ -265,11 +255,10 @@ func (h *DrawHandlerEnhanced) GetJackpotHistory(c *gin.Context) {
 	// Get jackpot history from service
 	 history, err := h.drawService.GetJackpotHistory(c, startDate, endDate)
 	 if err != nil {
-		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get jackpot history: " + err.Error() })
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get jackpot history: " + err.Error()})
 		 return
 	 }
 
-	 c.JSON(http.StatusOK, history) 
+	 c.JSON(http.StatusOK, history)
 }
-
 
