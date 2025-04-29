@@ -133,27 +133,21 @@ func (h *DrawHandler) GetPrizeStructure(c *gin.Context) {
 
 // UpdatePrizeStructure handles PUT /draws/prize-structure
 func (h *DrawHandler) UpdatePrizeStructure(c *gin.Context) {
-    // --- TEMPORARILY COMMENTED OUT FOR BUILD TEST ---
-    /*
-    var request struct {
-        DrawType  string                 `json:"draw_type" binding:"required"`
-        // Ensure models.PrizeStructure is recognized from the import
-        Structure []models.PrizeStructure `json:"structure" binding:"required"` // This is line 160
-    }
-    if err := c.ShouldBindJSON(&request); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()  })
-        return
-    }
-    err := h.drawService.UpdatePrizeStructure(c, request.DrawType, request.Structure)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prize structure: " + err.Error()  })
-        return
-    }
-    */
-    // --- END TEMPORARY COMMENT ---
-
-    // Return a temporary success message
-    c.JSON(http.StatusOK, gin.H{"message": "Prize structure update temporarily disabled for build test"}) 
+	 var request struct {
+		 DrawType  string                 `json:"draw_type" binding:"required"`
+		 // Ensure models.PrizeStructure is recognized from the import
+		 Structure []models.PrizeStructure `json:"structure" binding:"required"` // This is line 160
+	 }
+	 if err := c.ShouldBindJSON(&request); err != nil {
+		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()  })
+		 return
+	 }
+	 err := h.drawService.UpdatePrizeStructure(c, request.DrawType, request.Structure)
+	 if err != nil {
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prize structure: " + err.Error()  })
+		 return
+	 }
+	 c.JSON(http.StatusOK, gin.H{"message": "Prize structure updated successfully"}) 
 }
 
 // GetDraws handles GET /draws
@@ -228,5 +222,4 @@ func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 	 }
 	 c.JSON(http.StatusOK, history) 
 }
-
 
