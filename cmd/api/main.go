@@ -2,124 +2,96 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/api/routes"
-	"github.com/bridgetunes/mtn-backend/internal/config"
+	"github.com/bridgetunes/mtn-backend/internal/handlers"
 	"github.com/bridgetunes/mtn-backend/internal/repositories/mongodb"
 	"github.com/bridgetunes/mtn-backend/internal/services"
-	mongodbpkg "github.com/bridgetunes/mtn-backend/pkg/mongodb"
-	"github.com/bridgetunes/mtn-backend/pkg/mtnapi"
-	"github.com/bridgetunes/mtn-backend/pkg/smsgateway"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
-	// Load .env file if it exists
-	godotenv.Load()
-
-	// Load configuration
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
-
-	// Set Gin mode
-	if cfg.Server.Mode == "release" {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
 	// Connect to MongoDB
-	mongoClient, err := mongodbpkg.NewClient(cfg.MongoDB.URI)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	// Use environment variables in production
+	mongoURI := "mongodb://mongodb:27017"
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
-	defer mongoClient.Disconnect(context.Background())
-
-	// Get database
-	db := mongoClient.Database(cfg.MongoDB.Database)
-
+	defer client.Disconnect(ctx)
+	
+	// Ping MongoDB to verify connection
+	if err := client.Ping(ctx, nil); err != nil {
+		log.Fatalf("Failed to ping MongoDB: %v", err)
+	}
+	log.Println("Connected to MongoDB")
+	
+	// Initialize database
+	db := client.Database("bridgetunes")
+	
 	// Initialize repositories
 	userRepo := mongodb.NewUserRepository(db)
 	topupRepo := mongodb.NewTopupRepository(db)
 	drawRepo := mongodb.NewDrawRepository(db)
 	winnerRepo := mongodb.NewWinnerRepository(db)
-	notificationRepo := mongodb.NewNotificationRepository(db)
-	templateRepo := mongodb.NewTemplateRepository(db)
-	campaignRepo := mongodb.NewCampaignRepository(db)
-	blacklistRepo := mongodb.NewBlacklistRepository(db)
-
-	// Initialize MTN API client
-	mtnClient := mtnapi.NewClient(
-		cfg.MTN.BaseURL,
-		cfg.MTN.APIKey,
-		cfg.MTN.APISecret,
-		cfg.MTN.MockAPI,
-	)
-
-	// Initialize SMS gateways
-	mtnGateway := smsgateway.NewMTNGateway(
-		cfg.SMS.MTN.BaseURL,
-		cfg.SMS.MTN.APIKey,
-		cfg.SMS.MTN.APISecret,
-		cfg.SMS.MockSMS,
-	)
-	kodobeGateway := smsgateway.NewKodobeGateway(
-		cfg.SMS.Kodobe.BaseURL,
-		cfg.SMS.Kodobe.APIKey,
-		cfg.SMS.MockSMS,
-	)
-
+	configRepo := mongodb.NewSystemConfigRepository(db)
+	
 	// Initialize services
-	userService := services.NewUserService(userRepo)
-	topupService := services.NewTopupService(topupRepo, userService, mtnClient)
-	drawService := services.NewDrawService(drawRepo, userRepo, winnerRepo)
-	notificationService := services.NewNotificationService(
-		notificationRepo,
-		templateRepo,
-		campaignRepo,
+	drawService := services.NewDrawServiceEnhanced(
+		drawRepo,
 		userRepo,
-		mtnGateway,
-		kodobeGateway,
-		cfg.SMS.DefaultGateway,
+		winnerRepo,
+		configRepo,
+		topupRepo,
 	)
-
+	
+	// Initialize handlers
+	drawHandler := handlers.NewDrawHandlerEnhanced(drawService)
+	
 	// Initialize router
-	router := routes.SetupRouter(cfg, mongoClient.client)
-
-	// Start server
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: router,
-	}
-
-	// Graceful shutdown
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+	router := gin.Default()
+	
+	// Configure CORS
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+	
+	// API routes
+	api := router.Group("/api/v1")
+	{
+		// Draw management routes
+		draws := api.Group("/draws")
+		{
+			draws.GET("/config", drawHandler.GetDrawConfig)
+			draws.GET("/prize-structure", drawHandler.GetPrizeStructure)
+			draws.PUT("/prize-structure", drawHandler.UpdatePrizeStructure)
+			draws.POST("", drawHandler.ScheduleDraw)
+			draws.GET("", drawHandler.GetDraws)
+			draws.GET("/:id", drawHandler.GetDrawByID)
+			draws.POST("/:id/execute", drawHandler.ExecuteDraw)
+			draws.GET("/:id/winners", drawHandler.GetDrawWinners)
+			draws.GET("/jackpot-history", drawHandler.GetJackpotHistory)
 		}
-	}()
-
-	// Wait for interrupt signal to gracefully shutdown the server
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("Shutting down server...")
-
-	// The context is used to inform the server it has 5 seconds to finish
-	// the request it is currently handling
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
 	}
-
-	log.Println("Server exiting")
+	
+	// Start server
+	port := ":8080"
+	log.Printf("Server running on port %s", port)
+	if err := router.Run(port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
+
