@@ -14,6 +14,12 @@ RUN go mod download && go mod verify
 # Ensure you don't have a .dockerignore file excluding necessary code
 COPY . .
 
+# Explicitly run go mod tidy to ensure module consistency
+RUN go mod tidy
+
+# Clean Go build cache before building
+RUN go clean -cache
+
 # Build the application from the root directory using the full package path
 # Output the binary to /app/bridgetunes-api
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bridgetunes-api github.com/bridgetunes/mtn-backend/cmd/api
@@ -35,3 +41,4 @@ EXPOSE 8080
 # Define the command to run the application
 # Use the binary name specified in the build stage
 CMD ["./bridgetunes-api"]
+
