@@ -14,9 +14,9 @@ RUN go mod download && go mod verify
 # Ensure you don't have a .dockerignore file excluding necessary code
 COPY . .
 
-# Build the application from the root directory
+# Build the application from the root directory using the full package path
 # Output the binary to /app/bridgetunes-api
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bridgetunes-api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bridgetunes-api github.com/bridgetunes/mtn-backend/cmd/api
 
 # Stage 2: Create the final lightweight image
 FROM alpine:latest
@@ -35,4 +35,3 @@ EXPOSE 8080
 # Define the command to run the application
 # Use the binary name specified in the build stage
 CMD ["./bridgetunes-api"]
-
