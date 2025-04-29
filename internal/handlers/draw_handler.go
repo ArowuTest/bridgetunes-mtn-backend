@@ -5,6 +5,7 @@ import (
 	// "strconv" // Removed unused import
 	"time"
 
+	// Ensure this exact import path is used
 	"github.com/bridgetunes/mtn-backend/internal/models"
 	"github.com/bridgetunes/mtn-backend/internal/services"
 	"github.com/bridgetunes/mtn-backend/internal/utils"
@@ -28,20 +29,16 @@ func NewDrawHandler(drawService services.DrawService) *DrawHandler {
 
 // GetDrawByID handles GET /draws/:id
 func (h *DrawHandler) GetDrawByID(c *gin.Context) {
-	// Parse ID from URL
 	 id, err := primitive.ObjectIDFromHex(c.Param("id"))
 	 if err != nil {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"}) 
 		 return
 	 }
-
-	// Get draw from service
 	 draw, err := h.drawService.GetDrawByID(c, id)
 	 if err != nil {
 		 c.JSON(http.StatusNotFound, gin.H{"error": "Draw not found: " + err.Error() })
 		 return
 	 }
-
 	 c.JSON(http.StatusOK, draw) 
 }
 
@@ -58,67 +55,52 @@ func (h *DrawHandler) GetDrawByID(c *gin.Context) {
 // func (h *DrawHandler) GetDrawsByStatus(c *gin.Context) { ... }
 
 // ScheduleDraw handles POST /draws/schedule 
-// NOTE: This signature might differ from DrawHandlerEnhanced, ensure consistency or remove if not used
 func (h *DrawHandler) ScheduleDraw(c *gin.Context) {
-	// Parse request body
 	 var request struct {
 		 DrawDate       string `json:"draw_date" binding:"required"`
 		 DrawType       string `json:"draw_type" binding:"required"`
 		 EligibleDigits []int  `json:"eligible_digits"`
-		 UseDefault     bool   `json:"use_default"` // Match DrawHandlerEnhanced
+		 UseDefault     bool   `json:"use_default"`
 	 }
 	 if err := c.ShouldBindJSON(&request); err != nil {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error() })
 		 return
 	 }
-
-	// Parse draw date
 	 drawDate, err := time.Parse("2006-01-02", request.DrawDate)
 	 if err != nil {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw date format (YYYY-MM-DD) "})
 		 return
 	 }
-
-	// Validate draw type (Assuming SATURDAY based on DrawHandlerEnhanced)
 	 if request.DrawType != "DAILY" && request.DrawType != "SATURDAY" { 
 		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid draw type (DAILY or SATURDAY) "})
 		 return
 	 }
-
-	// Determine eligible digits
 	 var eligibleDigits []int
 	 if request.UseDefault {
 		 eligibleDigits = utils.GetDefaultEligibleDigits(drawDate.Weekday())
 	 } else {
 		 eligibleDigits = request.EligibleDigits
 	 }
-
-	// Schedule draw - Ensure arguments match DrawService interface
 	 draw, err := h.drawService.ScheduleDraw(c, drawDate, request.DrawType, eligibleDigits, request.UseDefault) 
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to schedule draw: " + err.Error() })
 		 return
 	 }
-
 	 c.JSON(http.StatusCreated, draw) 
 }
 
 // ExecuteDraw handles POST /draws/:id/execute
 func (h *DrawHandler) ExecuteDraw(c *gin.Context) {
-	// Parse ID from URL
 	 id, err := primitive.ObjectIDFromHex(c.Param("id"))
 	 if err != nil {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"}) 
 		 return
 	 }
-
-	// Execute draw
 	 _, err = h.drawService.ExecuteDraw(c, id) 
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute draw: " + err.Error() })
 		 return
 	 }
-
 	 c.JSON(http.StatusOK, gin.H{"message": "Draw executed successfully"}) 
 }
 
@@ -130,7 +112,7 @@ func (h *DrawHandler) ExecuteDraw(c *gin.Context) {
 // NOTE: This method is likely deprecated as it's not in the DrawService interface
 // func (h *DrawHandler) GetDefaultEligibleDigits(c *gin.Context) { ... }
 
-// --- Added methods to match DrawHandlerEnhanced and DrawService interface ---
+// --- Methods matching DrawHandlerEnhanced and DrawService interface ---
 
 // GetDrawConfig handles GET /draws/config
 func (h *DrawHandler) GetDrawConfig(c *gin.Context) {
@@ -146,7 +128,6 @@ func (h *DrawHandler) GetDrawConfig(c *gin.Context) {
 			 return
 		 }
 	 }
-
 	 config, err := h.drawService.GetDrawConfig(c, date)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draw config: " + err.Error() })
@@ -162,6 +143,8 @@ func (h *DrawHandler) GetPrizeStructure(c *gin.Context) {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": "Missing draw_type query parameter"}) 
 		 return
 	 }
+	 // This line was causing the 'undefined: models' error previously.
+	 // Ensure 'models' is correctly imported above.
 	 structure, err := h.drawService.GetPrizeStructure(c, drawType)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get prize structure: " + err.Error() })
@@ -174,13 +157,13 @@ func (h *DrawHandler) GetPrizeStructure(c *gin.Context) {
 func (h *DrawHandler) UpdatePrizeStructure(c *gin.Context) {
 	 var request struct {
 		 DrawType  string                 `json:"draw_type" binding:"required"`
+		 // Ensure models.PrizeStructure is recognized from the import
 		 Structure []models.PrizeStructure `json:"structure" binding:"required"`
 	 }
 	 if err := c.ShouldBindJSON(&request); err != nil {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error() })
 		 return
 	 }
-
 	 err := h.drawService.UpdatePrizeStructure(c, request.DrawType, request.Structure)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prize structure: " + err.Error() })
@@ -193,7 +176,6 @@ func (h *DrawHandler) UpdatePrizeStructure(c *gin.Context) {
 func (h *DrawHandler) GetDraws(c *gin.Context) {
 	 startDateStr := c.Query("start_date")
 	 endDateStr := c.Query("end_date")
-
 	 var startDate, endDate time.Time
 	 var err error
 	 if startDateStr != "" {
@@ -211,7 +193,6 @@ func (h *DrawHandler) GetDraws(c *gin.Context) {
 		 }
 		 endDate = endDate.Add(24 * time.Hour)
 	 }
-
 	 draws, err := h.drawService.GetDraws(c, startDate, endDate)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draws: " + err.Error() })
@@ -227,7 +208,6 @@ func (h *DrawHandler) GetDrawWinners(c *gin.Context) {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"}) 
 		 return
 	 }
-
 	 winners, err := h.drawService.GetWinnersByDrawID(c, id)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draw winners: " + err.Error() })
@@ -240,7 +220,6 @@ func (h *DrawHandler) GetDrawWinners(c *gin.Context) {
 func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 	 startDateStr := c.Query("start_date")
 	 endDateStr := c.Query("end_date")
-
 	 var startDate, endDate time.Time
 	 var err error
 	 if startDateStr != "" {
@@ -258,7 +237,6 @@ func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 		 }
 		 endDate = endDate.Add(24 * time.Hour)
 	 }
-
 	 history, err := h.drawService.GetJackpotHistory(c, startDate, endDate)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get jackpot history: " + err.Error() })
@@ -266,4 +244,5 @@ func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 	 }
 	 c.JSON(http.StatusOK, history) 
 }
+
 
