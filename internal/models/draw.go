@@ -6,55 +6,71 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Draw represents a draw in the system
+// Draw represents a scheduled draw event
 type Draw struct {
-	ID                  primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	DrawDate            time.Time          `bson:"drawDate" json:"drawDate"`
-	DrawType            string             `bson:"drawType" json:"drawType"` // DAILY or WEEKLY
-	EligibleDigits      []int              `bson:"eligibleDigits" json:"eligibleDigits"`
-	Status              string             `bson:"status" json:"status"` // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
-	TotalParticipants   int                `bson:"totalParticipants" json:"totalParticipants"`
-	OptedInParticipants int                `bson:"optedInParticipants" json:"optedInParticipants"` // Participants in the consolation prize pool
-	Prizes              []Prize            `bson:"prizes" json:"prizes"`
-	JackpotAmount       float64            `bson:"jackpotAmount" json:"jackpotAmount"` // Calculated jackpot for this draw
-	RolloverSource      []RolloverInfo     `bson:"rolloverSource,omitempty" json:"rolloverSource,omitempty"` // Info about rollovers contributing to this draw
-	RolloverTarget      *primitive.ObjectID `bson:"rolloverTarget,omitempty" json:"rolloverTarget,omitempty"` // ID of the draw this jackpot rolled over to (if applicable)
-	CreatedAt           time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt           time.Time          `bson:"updatedAt" json:"updatedAt"`
+	ID             primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	DrawDate       time.Time          `json:"draw_date" bson:"draw_date"`
+	DrawType       string             `json:"draw_type" bson:"draw_type"` // e.g., DAILY, SATURDAY
+	EligibleDigits []int              `json:"eligible_digits" bson:"eligible_digits"`
+	UseDefault     bool               `json:"use_default" bson:"use_default"`
+	Prizes         []Prize            `json:"prizes" bson:"prizes"`
+	JackpotAmount  float64            `json:"jackpot_amount" bson:"jackpot_amount"`
+	Status         string             `json:"status" bson:"status"` // e.g., SCHEDULED, EXECUTED, FAILED
+	ExecutionTime  time.Time          `json:"execution_time,omitempty" bson:"execution_time,omitempty"`
+	Winners        []Winner           `json:"winners,omitempty" bson:"winners,omitempty"`
+	ErrorMessage   string             `json:"error_message,omitempty" bson:"error_message,omitempty"`
+	CreatedAt      time.Time          `json:"created_at" bson:"created_at"`
+	UpdatedAt      time.Time          `json:"updated_at" bson:"updated_at"`
 }
 
-// Prize represents a prize in a draw
+// Prize represents a prize tier within a draw
 type Prize struct {
-	Category  string             `bson:"category" json:"category"`
-	Amount    float64            `bson:"amount" json:"amount"`
-	WinnerID  primitive.ObjectID `bson:"winnerId,omitempty" json:"winnerId,omitempty"`
-	IsValid   *bool              `bson:"isValid,omitempty" json:"isValid,omitempty"` // Pointer to bool to distinguish between false and not set
+	Tier        int     `json:"tier" bson:"tier"`
+	Description string  `json:"description" bson:"description"`
+	Amount      float64 `json:"amount" bson:"amount"`
+	NumWinners  int     `json:"num_winners" bson:"num_winners"` // How many winners for this tier
 }
 
-// RolloverInfo tracks jackpot rollovers contributing to a draw
-type RolloverInfo struct {
-	SourceDrawID primitive.ObjectID `bson:"sourceDrawId" json:"sourceDrawId"`
-	Amount       float64            `bson:"amount" json:"amount"`
-	Reason       string             `bson:"reason" json:"reason"` // e.g., "INVALID_WINNER"
+// Winner represents a winner of a specific prize in a draw
+type Winner struct {
+	Msisdn      string             `json:"msisdn" bson:"msisdn"`
+	PrizeTier   int                `json:"prize_tier" bson:"prize_tier"`
+	PrizeAmount float64            `json:"prize_amount" bson:"prize_amount"`
+	DrawID      primitive.ObjectID `json:"draw_id" bson:"draw_id"`
+	DrawDate    time.Time          `json:"draw_date" bson:"draw_date"`
+	Notified    bool               `json:"notified" bson:"notified"`
+	Paid        bool               `json:"paid" bson:"paid"`
+	PaymentRef  string             `json:"payment_ref,omitempty" bson:"payment_ref,omitempty"`
+	CreatedAt   time.Time          `json:"created_at" bson:"created_at"`
 }
 
-// SystemConfig stores system configuration values
+// SystemConfig stores system-wide configurations like prize structures
 type SystemConfig struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	Key         string             `bson:"key" json:"key"` // e.g., "prizeStructureDaily", "prizeStructureWeekly"
-	Value       interface{}        `bson:"value" json:"value"`
-	Description string             `bson:"description" json:"description"`
-	UpdatedAt   time.Time          `bson:"updatedAt" json:"updatedAt"`
+	ID           primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Key          string             `json:"key" bson:"key"` // e.g., "prize_structure_daily", "prize_structure_saturday"
+	Value        interface{}        `json:"value" bson:"value"` // Can store different types of config, like []PrizeStructure
+	Description  string             `json:"description" bson:"description"`
+	LastModified time.Time          `json:"last_modified" bson:"last_modified"`
 }
 
-// PrizeStructure defines the structure for prizes stored in SystemConfig
+// JackpotHistory stores records of jackpot amounts over time
+type JackpotHistory struct {
+	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Date      time.Time          `json:"date" bson:"date"`
+	Amount    float64            `json:"amount" bson:"amount"`
+	DrawType  string             `json:"draw_type" bson:"draw_type"` // DAILY or SATURDAY
+	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
+}
+
+/*
+// PrizeStructure defines the structure for a specific prize tier
+// MOVED TO handlers/draw_handler.go FOR DIAGNOSTIC TEST
 type PrizeStructure struct {
-	Category string  `bson:"category" json:"category"`
-	Amount   float64 `bson:"amount" json:"amount"`
-	Count    int     `bson:"count" json:"count"` // Number of prizes for this category (e.g., 7 for consolation)
+	Tier        int     `json:"tier" bson:"tier" binding:"required"`
+	Description string  `json:"description" bson:"description" binding:"required"`
+	Amount      float64 `json:"amount" bson:"amount" binding:"required"`
+	NumWinners  int     `json:"num_winners" bson:"num_winners" binding:"required"`
 }
-
-// NOTE: The Winner struct definition has been removed from this file.
-// It should be defined in internal/models/winner.go
+*/
 
 
