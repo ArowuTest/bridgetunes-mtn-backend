@@ -10,12 +10,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// NotificationService handles notification-related business logic
-type NotificationService struct {
+// LegacyNotificationService handles notification-related business logic // Renamed from NotificationService
+type LegacyNotificationService struct {
 	notificationRepo repositories.NotificationRepository
-	// --- NOTE: Ensure CampaignRepository interface includes FindAll method ---
 	campaignRepo     repositories.CampaignRepository
-	// --- NOTE: Ensure TemplateRepository interface includes FindAll method ---
 	 templateRepo     repositories.TemplateRepository
 	userRepo         repositories.UserRepository
 	mtnGateway       smsgateway.Gateway
@@ -23,8 +21,8 @@ type NotificationService struct {
 	defaultGateway   string
 }
 
-// NewNotificationService creates a new NotificationService
-func NewNotificationService(
+// NewLegacyNotificationService creates a new LegacyNotificationService // Renamed from NewNotificationService
+func NewLegacyNotificationService(
 	notificationRepo repositories.NotificationRepository,
 	 templateRepo repositories.TemplateRepository,
 	 campaignRepo repositories.CampaignRepository,
@@ -32,8 +30,8 @@ func NewNotificationService(
 	 mtnGateway smsgateway.Gateway,
 	 kodobeGateway smsgateway.Gateway,
 	 defaultGateway string,
-) *NotificationService {
-	return &NotificationService{
+) *LegacyNotificationService { // Renamed return type
+	return &LegacyNotificationService{ // Renamed struct type
 		notificationRepo: notificationRepo,
 		 templateRepo:     templateRepo,
 		 campaignRepo:     campaignRepo,
@@ -45,27 +43,27 @@ func NewNotificationService(
 }
 
 // GetNotificationByID retrieves a notification by ID
-func (s *NotificationService) GetNotificationByID(ctx context.Context, id primitive.ObjectID) (*models.Notification, error) {
+func (s *LegacyNotificationService) GetNotificationByID(ctx context.Context, id primitive.ObjectID) (*models.Notification, error) {
 	return s.notificationRepo.FindByID(ctx, id)
 }
 
 // GetNotificationsByMSISDN retrieves notifications by MSISDN with pagination
-func (s *NotificationService) GetNotificationsByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Notification, error) {
+func (s *LegacyNotificationService) GetNotificationsByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Notification, error) {
 	return s.notificationRepo.FindByMSISDN(ctx, msisdn, page, limit)
 }
 
 // GetNotificationsByCampaignID retrieves notifications by campaign ID with pagination
-func (s *NotificationService) GetNotificationsByCampaignID(ctx context.Context, campaignID primitive.ObjectID, page, limit int) ([]*models.Notification, error) {
+func (s *LegacyNotificationService) GetNotificationsByCampaignID(ctx context.Context, campaignID primitive.ObjectID, page, limit int) ([]*models.Notification, error) {
 	return s.notificationRepo.FindByCampaignID(ctx, campaignID, page, limit)
 }
 
 // GetNotificationsByStatus retrieves notifications by status with pagination
-func (s *NotificationService) GetNotificationsByStatus(ctx context.Context, status string, page, limit int) ([]*models.Notification, error) {
+func (s *LegacyNotificationService) GetNotificationsByStatus(ctx context.Context, status string, page, limit int) ([]*models.Notification, error) {
 	return s.notificationRepo.FindByStatus(ctx, status, page, limit)
 }
 
 // SendSMS sends an SMS notification
-func (s *NotificationService) SendSMS(ctx context.Context, msisdn, content, notificationType string, campaignID primitive.ObjectID) (*models.Notification, error) {
+func (s *LegacyNotificationService) SendSMS(ctx context.Context, msisdn, content, notificationType string, campaignID primitive.ObjectID) (*models.Notification, error) {
 	// Create notification record
 	notification := &models.Notification{
 		MSISDN:     msisdn,
@@ -118,22 +116,19 @@ func (s *NotificationService) SendSMS(ctx context.Context, msisdn, content, noti
 }
 
 // CreateCampaign creates a new notification campaign
-func (s *NotificationService) CreateCampaign(ctx context.Context, campaign *models.Campaign) error {
+func (s *LegacyNotificationService) CreateCampaign(ctx context.Context, campaign *models.Campaign) error {
 	campaign.CreatedAt = time.Now()
 	campaign.UpdatedAt = time.Now()
 	return s.campaignRepo.Create(ctx, campaign)
 }
 
-// --- ADDED CODE START ---
 // GetAllCampaigns retrieves all campaigns with pagination
-func (s *NotificationService) GetAllCampaigns(ctx context.Context, page, limit int) ([]models.Campaign, error) {
-	// Directly call the repository method
+func (s *LegacyNotificationService) GetAllCampaigns(ctx context.Context, page, limit int) ([]models.Campaign, error) {
 	 return s.campaignRepo.FindAll(ctx, page, limit)
 }
-// --- ADDED CODE END ---
 
 // ExecuteCampaign executes a notification campaign
-func (s *NotificationService) ExecuteCampaign(ctx context.Context, campaignID primitive.ObjectID) error {
+func (s *LegacyNotificationService) ExecuteCampaign(ctx context.Context, campaignID primitive.ObjectID) error {
 	// Get the campaign
 	 campaign, err := s.campaignRepo.FindByID(ctx, campaignID)
 	 if err != nil {
@@ -153,23 +148,7 @@ func (s *NotificationService) ExecuteCampaign(ctx context.Context, campaignID pr
 
 	// Get target users based on segment
 	 var targetUsers []*models.User
-	 // --- NOTE: Assumes Campaign struct has a Segment field with Type and MSISDNs ---
-	 // --- You might need to adjust this logic based on your actual Campaign model ---
-	 // if campaign.Segment.Type == "ALL" {
-	 // 	 targetUsers, err = s.userRepo.FindAll(ctx, 1, 1000) // Get all users (paginated)
-	 // } else if campaign.Segment.Type == "OPT_IN" {
-	 // 	 targetUsers, err = s.userRepo.FindByOptInStatus(ctx, true, 1, 1000) // Get opted-in users
-	 // } else if campaign.Segment.Type == "CUSTOM" && len(campaign.Segment.MSISDNs) > 0 {
-	 // 	 // Get users by MSISDNs
-	 // 	 for _, msisdn := range campaign.Segment.MSISDNs {
-	 // 	 	 user, err := s.userRepo.FindByMSISDN(ctx, msisdn)
-	 // 	 	 if err == nil && user != nil {
-	 // 	 	 	 targetUsers = append(targetUsers, user)
-	 // 	 	 }
-	 // 	 }
-	 // }
-
-	// --- Placeholder: Fetch all opted-in users for now --- 
+	 // Placeholder: Fetch all opted-in users for now
 	 targetUsers, err = s.userRepo.FindByOptInStatus(ctx, true, 1, 10000) // Increased limit for testing
 
 	 if err != nil {
@@ -178,7 +157,6 @@ func (s *NotificationService) ExecuteCampaign(ctx context.Context, campaignID pr
 
 	// Update campaign status
 	 campaign.Status = "RUNNING"
-	 // campaign.StartedAt = time.Now() // Assuming StartedAt field exists
 	 err = s.campaignRepo.Update(ctx, campaign)
 	 if err != nil {
 	 	 return err
@@ -187,12 +165,10 @@ func (s *NotificationService) ExecuteCampaign(ctx context.Context, campaignID pr
 	// Send notifications to target users
 	 var totalSent, delivered, failed int
 	 for _, user := range targetUsers {
-	 	 // Skip users who have opted out (redundant if fetching only opted-in, but good practice)
 	 	 if !user.OptInStatus {
 	 	 	 continue
 	 	 }
 
-	 	 // Send notification
 	 	 _, sendErr := s.SendSMS(ctx, user.MSISDN, template.Content, template.Type, campaign.ID)
 	 	 totalSent++
 	 	 if sendErr == nil {
@@ -204,63 +180,60 @@ func (s *NotificationService) ExecuteCampaign(ctx context.Context, campaignID pr
 
 	// Update campaign status and stats
 	 campaign.Status = "COMPLETED"
-	 // campaign.CompletedAt = time.Now() // Assuming CompletedAt field exists
-	 // campaign.TotalSent = totalSent // Assuming these fields exist
-	 // campaign.Delivered = delivered
-	 // campaign.Failed = failed
+	 // Add stats update here if fields exist in Campaign model
 	 return s.campaignRepo.Update(ctx, campaign)
 }
 
 // CreateTemplate creates a new notification template
-func (s *NotificationService) CreateTemplate(ctx context.Context, template *models.Template) error {
+func (s *LegacyNotificationService) CreateTemplate(ctx context.Context, template *models.Template) error {
 	 template.CreatedAt = time.Now()
 	 template.UpdatedAt = time.Now()
 	 return s.templateRepo.Create(ctx, template)
 }
 
 // GetTemplateByID retrieves a template by ID
-func (s *NotificationService) GetTemplateByID(ctx context.Context, id primitive.ObjectID) (*models.Template, error) {
+func (s *LegacyNotificationService) GetTemplateByID(ctx context.Context, id primitive.ObjectID) (*models.Template, error) {
 	 return s.templateRepo.FindByID(ctx, id)
 }
 
 // GetTemplateByName retrieves a template by name
-func (s *NotificationService) GetTemplateByName(ctx context.Context, name string) (*models.Template, error) {
+func (s *LegacyNotificationService) GetTemplateByName(ctx context.Context, name string) (*models.Template, error) {
 	 return s.templateRepo.FindByName(ctx, name)
 }
 
 // GetTemplatesByType retrieves templates by type with pagination
-func (s *NotificationService) GetTemplatesByType(ctx context.Context, templateType string, page, limit int) ([]*models.Template, error) {
+func (s *LegacyNotificationService) GetTemplatesByType(ctx context.Context, templateType string, page, limit int) ([]*models.Template, error) {
 	 return s.templateRepo.FindByType(ctx, templateType, page, limit)
 }
 
 // GetAllTemplates retrieves all templates with pagination
-func (s *NotificationService) GetAllTemplates(ctx context.Context, page, limit int) ([]*models.Template, error) {
+func (s *LegacyNotificationService) GetAllTemplates(ctx context.Context, page, limit int) ([]*models.Template, error) {
 	 return s.templateRepo.FindAll(ctx, page, limit)
 }
 
 // UpdateTemplate updates a template
-func (s *NotificationService) UpdateTemplate(ctx context.Context, template *models.Template) error {
+func (s *LegacyNotificationService) UpdateTemplate(ctx context.Context, template *models.Template) error {
 	 template.UpdatedAt = time.Now()
 	 return s.templateRepo.Update(ctx, template)
 }
 
 // DeleteTemplate deletes a template
-func (s *NotificationService) DeleteTemplate(ctx context.Context, id primitive.ObjectID) error {
+func (s *LegacyNotificationService) DeleteTemplate(ctx context.Context, id primitive.ObjectID) error {
 	 return s.templateRepo.Delete(ctx, id)
 }
 
 // GetNotificationCount gets the total number of notifications
-func (s *NotificationService) GetNotificationCount(ctx context.Context) (int64, error) {
+func (s *LegacyNotificationService) GetNotificationCount(ctx context.Context) (int64, error) {
 	 return s.notificationRepo.Count(ctx)
 }
 
 // GetCampaignCount gets the total number of campaigns
-func (s *NotificationService) GetCampaignCount(ctx context.Context) (int64, error) {
+func (s *LegacyNotificationService) GetCampaignCount(ctx context.Context) (int64, error) {
 	 return s.campaignRepo.Count(ctx)
 }
 
 // GetTemplateCount gets the total number of templates
-func (s *NotificationService) GetTemplateCount(ctx context.Context) (int64, error) {
+func (s *LegacyNotificationService) GetTemplateCount(ctx context.Context) (int64, error) {
 	 return s.templateRepo.Count(ctx)
 }
 
