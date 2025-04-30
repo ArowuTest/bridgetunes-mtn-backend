@@ -17,7 +17,8 @@ type Draw struct {
 	JackpotAmount  float64            `json:"jackpot_amount" bson:"jackpot_amount"`
 	Status         string             `json:"status" bson:"status"` // e.g., SCHEDULED, EXECUTED, FAILED
 	ExecutionTime  time.Time          `json:"execution_time,omitempty" bson:"execution_time,omitempty"`
-	Winners        []Winner           `json:"winners,omitempty" bson:"winners,omitempty"`
+	// Winners field removed as Winner struct is defined in winner.go
+	// Winners        []Winner           `json:"winners,omitempty" bson:"winners,omitempty"` 
 	ErrorMessage   string             `json:"error_message,omitempty" bson:"error_message,omitempty"`
 	CreatedAt      time.Time          `json:"created_at" bson:"created_at"`
 	UpdatedAt      time.Time          `json:"updated_at" bson:"updated_at"`
@@ -31,6 +32,7 @@ type Prize struct {
 	NumWinners  int     `json:"num_winners" bson:"num_winners"` // How many winners for this tier
 }
 
+/* Winner struct definition removed - should be defined in winner.go
 // Winner represents a winner of a specific prize in a draw
 type Winner struct {
 	Msisdn      string             `json:"msisdn" bson:"msisdn"`
@@ -43,6 +45,7 @@ type Winner struct {
 	PaymentRef  string             `json:"payment_ref,omitempty" bson:"payment_ref,omitempty"`
 	CreatedAt   time.Time          `json:"created_at" bson:"created_at"`
 }
+*/
 
 // SystemConfig stores system-wide configurations like prize structures
 type SystemConfig struct {
@@ -62,15 +65,12 @@ type JackpotHistory struct {
 	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
 }
 
-/*
 // PrizeStructure defines the structure for a specific prize tier
-// MOVED TO handlers/draw_handler.go FOR DIAGNOSTIC TEST
+// Restored here
 type PrizeStructure struct {
 	Tier        int     `json:"tier" bson:"tier" binding:"required"`
 	Description string  `json:"description" bson:"description" binding:"required"`
 	Amount      float64 `json:"amount" bson:"amount" binding:"required"`
 	NumWinners  int     `json:"num_winners" bson:"num_winners" binding:"required"`
 }
-*/
-
 
