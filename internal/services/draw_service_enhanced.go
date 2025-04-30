@@ -7,7 +7,6 @@ import (
 	"log"
 	"math/rand"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/bridgetunes/mtn-backend/internal/models"
