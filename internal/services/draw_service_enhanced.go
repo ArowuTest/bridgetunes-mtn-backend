@@ -13,6 +13,7 @@ import (
 	"github.com/bridgetunes/mtn-backend/internal/models"
 	"github.com/bridgetunes/mtn-backend/internal/repositories"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo" // Added missing import
 )
 
 // DrawServiceEnhanced handles draw logic with enhanced features
@@ -41,7 +42,7 @@ func NewDrawServiceEnhanced(
 	 }
 }
 
-// Constants for draw types and status
+// Constants for draw types and status (assuming these are correct)
 const (
 	 DrawTypeDaily   = "DAILY"
 	 DrawTypeWeekly  = "WEEKLY"
@@ -109,10 +110,29 @@ func (s *DrawServiceEnhanced) GetPrizeStructure(ctx context.Context, drawType st
 	 }
 
 	 // Type assertion to convert interface{} to []models.PrizeStructure
-	 prizeStructure, ok := config.Value.([]models.PrizeStructure)
+	 // Note: This assumes the value is stored correctly. Consider more robust validation.
+	 prizeStructureRaw, ok := config.Value.([]interface{})
 	 if !ok {
-		  log.Printf("Error: Invalid prize structure format in config for key %s", prizeKey)
+		  log.Printf("Error: Invalid prize structure format (not a slice) in config for key %s", prizeKey)
 		  return getDefaultPrizeStructure(drawType), fmt.Errorf("invalid prize structure format in config")
+	 }
+
+	 var prizeStructure []models.PrizeStructure
+	 for _, item := range prizeStructureRaw {
+		  itemMap, ok := item.(map[string]interface{})
+		  if !ok {
+			   log.Printf("Error: Invalid prize structure item format (not a map) in config for key %s", prizeKey)
+			   return getDefaultPrizeStructure(drawType), fmt.Errorf("invalid prize structure item format in config")
+		  }
+		  // Manual conversion - consider using a library like mapstructure for complex cases
+		  ps := models.PrizeStructure{}
+		  if cat, ok := itemMap["category"].(string); ok { ps.Category = cat }
+		  if amt, ok := itemMap["amount"].(float64); ok { ps.Amount = amt }
+		  if cnt, ok := itemMap["count"].(float64); ok { ps.Count = int(cnt) } // BSON might decode numbers as float64
+		  if cnt, ok := itemMap["count"].(int32); ok { ps.Count = int(cnt) } // Or int32
+		  if cnt, ok := itemMap["count"].(int64); ok { ps.Count = int(cnt) } // Or int64
+		  // Add other fields like Tier, Description if needed
+		  prizeStructure = append(prizeStructure, ps)
 	 }
 
 	 return prizeStructure, nil
@@ -130,7 +150,7 @@ func (s *DrawServiceEnhanced) UpdatePrizeStructure(ctx context.Context, drawType
 		  // If not found, create a new config entry
 		  newConfig := &models.SystemConfig{
 			   Key:         prizeKey,
-			   Value:       structure,
+			   Value:       structure, // Store the struct slice directly
 			   Description: fmt.Sprintf("Prize structure for %s draws", drawType),
 			   UpdatedAt:   time.Now(),
 		  }
@@ -138,7 +158,7 @@ func (s *DrawServiceEnhanced) UpdatePrizeStructure(ctx context.Context, drawType
 	 }
 
 	 // If found, update the existing config entry
-	 config.Value = structure
+	 config.Value = structure // Store the struct slice directly
 	 config.UpdatedAt = time.Now()
 	 return s.configRepo.Update(ctx, config)
 }
@@ -168,7 +188,13 @@ func (s *DrawServiceEnhanced) ScheduleDraw(ctx context.Context, drawDate time.Ti
 	 // Create prize entries for the draw based on the structure
 	 prizes := []models.Prize{}
 	 for _, p := range prizeStructure {
-		  for i := 0; i < p.Count; i++ {
+		  // Ensure Count is positive
+		  count := p.Count
+		  if count < 0 {
+			   log.Printf("Warning: Prize structure for %s has negative count (%d) for category %s. Setting count to 0.", drawType, count, p.Category)
+			   count = 0
+		  }
+		  for i := 0; i < count; i++ {
 			   prizes = append(prizes, models.Prize{
 				    Category: p.Category,
 				    Amount:   p.Amount,
@@ -177,17 +203,28 @@ func (s *DrawServiceEnhanced) ScheduleDraw(ctx context.Context, drawDate time.Ti
 	 }
 
 	 // Find the jackpot prize entry and set its amount
+	 jackpotPrizeFound := false
 	 for i := range prizes {
 		  if prizes[i].Category == JackpotCategory {
 			   prizes[i].Amount = jackpotAmount
+			   jackpotPrizeFound = true
 			   break
 		  }
 	 }
+	 // If no jackpot prize was defined in the structure, add one with the calculated amount
+	 if !jackpotPrizeFound {
+		  log.Printf("Warning: No Jackpot category found in prize structure for %s. Adding default jackpot prize.", drawType)
+		  prizes = append(prizes, models.Prize{
+			   Category: JackpotCategory,
+			   Amount:   jackpotAmount,
+		  })
+	 }
 
-	 // Get rollover info contributing to this jackpot
-	 rolloverSource, err := s.getRolloverSource(ctx, drawDate)
+	 // Get rollover source ID contributing to this jackpot
+	 rolloverSourceID, err := s.getRolloverSource(ctx, drawDate)
 	 if err != nil {
-		  return nil, fmt.Errorf("failed to get rollover source: %w", err)
+		  // Log error but proceed without rollover source ID
+		  log.Printf("Error getting rollover source ID: %v", err)
 	 }
 
 	 draw := &models.Draw{
@@ -197,7 +234,7 @@ func (s *DrawServiceEnhanced) ScheduleDraw(ctx context.Context, drawDate time.Ti
 		  Status:         DrawStatusScheduled,
 		  Prizes:         prizes,
 		  JackpotAmount:  jackpotAmount,
-		  RolloverSource: rolloverSource,
+		  RolloverSource: rolloverSourceID, // Assign the *primitive.ObjectID
 		  CreatedAt:      time.Now(),
 		  UpdatedAt:      time.Now(),
 	 }
@@ -233,6 +270,7 @@ func (s *DrawServiceEnhanced) ExecuteDraw(ctx context.Context, drawID primitive.
 
 	 // --- Get Participants ---
 	 // Jackpot Pool: All users who recharged in the time range
+	 // Assuming FindByRechargeTimeRange doesn't need pagination
 	 jackpotParticipants, err := s.userRepo.FindByRechargeTimeRange(ctx, startTime, endTime)
 	 if err != nil {
 		  s.cancelDraw(ctx, draw, fmt.Sprintf("failed to get jackpot participants: %v", err))
@@ -298,7 +336,6 @@ func (s *DrawServiceEnhanced) ExecuteDraw(ctx context.Context, drawID primitive.
 			   jackpotRolloverNeeded = true
 		  }
 
-		  // Removed unused variable: winnerMSISDN := winner.MSISDN
 		  maskedMSISDN := maskMSISDN(winner.MSISDN)
 
 		  winnerRecord := &models.Winner{
@@ -318,7 +355,8 @@ func (s *DrawServiceEnhanced) ExecuteDraw(ctx context.Context, drawID primitive.
 
 		  err = s.winnerRepo.Create(ctx, winnerRecord)
 		  if err != nil {
-			   s.cancelDraw(ctx, draw, fmt.Sprintf("failed to save winner record: %v", err))
+			   // Attempt to rollback or log critical error
+			   s.cancelDraw(ctx, draw, fmt.Sprintf("CRITICAL: failed to save winner record: %v", err))
 			   return nil, fmt.Errorf("failed to save winner record: %w", err)
 		  }
 
@@ -341,10 +379,12 @@ func (s *DrawServiceEnhanced) ExecuteDraw(ctx context.Context, drawID primitive.
 
 	 // Update draw status to COMPLETED
 	 draw.Status = DrawStatusCompleted
+	 draw.ExecutionTime = time.Now() // Record execution time
 	 draw.UpdatedAt = time.Now()
 	 if err := s.drawRepo.Update(ctx, draw); err != nil {
 		  // Log error but don't cancel the draw at this point
 		  log.Printf("Error updating draw status to completed for draw %s: %v", draw.ID.Hex(), err)
+		  // Consider returning the draw object anyway, but with an error? Or just log?
 	 }
 
 	 // TODO: trigger notifications to winners
@@ -354,11 +394,10 @@ func (s *DrawServiceEnhanced) ExecuteDraw(ctx context.Context, drawID primitive.
 
 // GetDraws retrieves a list of draws within a time range
 func (s *DrawServiceEnhanced) GetDraws(ctx context.Context, startTime, endTime time.Time) ([]*models.Draw, error) {
-	 // Implementation updated to match interface: uses startTime, endTime
-	 // Assuming FindByDateRange takes (ctx, startTime, endTime) and handles pagination internally or doesn't need it.
-	 // If FindByDateRange requires pagination, its signature or the interface might need adjustment.
-	 log.Printf("Fetching draws between %v and %v", startTime, endTime)
-	 draws, err := s.drawRepo.FindByDateRange(ctx, startTime, endTime)
+	 // Added default pagination (page=0, limit=0) to match interface/implementation
+	 // Assuming page=0, limit=0 means "no pagination" in the repository layer
+	 log.Printf("Fetching draws between %v and %v (no pagination)", startTime, endTime)
+	 draws, err := s.drawRepo.FindByDateRange(ctx, startTime, endTime, 0, 0)
 	 if err != nil {
 		  log.Printf("Error fetching draws by date range: %v", err)
 		  return nil, fmt.Errorf("failed to fetch draws by date range: %w", err)
@@ -373,7 +412,9 @@ func (s *DrawServiceEnhanced) GetDrawByID(ctx context.Context, drawID primitive.
 
 // GetDrawWinners retrieves the winners for a specific draw
 func (s *DrawServiceEnhanced) GetDrawWinners(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
-	 return s.winnerRepo.FindByDrawID(ctx, drawID)
+	 // Added default pagination (page=0, limit=0) to match interface/implementation
+	 // Assuming page=0, limit=0 means "no pagination" in the repository layer
+	 return s.winnerRepo.FindByDrawID(ctx, drawID, 0, 0)
 }
 
 // GetJackpotHistory retrieves the history of jackpot amounts
@@ -388,7 +429,8 @@ func (s *DrawServiceEnhanced) GetJackpotHistory(ctx context.Context, limit int) 
 	 for _, draw := range draws {
 		  var jackpotPrize *models.Prize
 		  for i := range draw.Prizes {
-			   if draw.Prizes[i].Category == JackpotCategory {
+			   // Use constant from models package
+			   if draw.Prizes[i].Category == models.JackpotCategory {
 				    jackpotPrize = &draw.Prizes[i]
 				    break
 			   }
@@ -495,7 +537,8 @@ func (s *DrawServiceEnhanced) calculateCurrentJackpot(ctx context.Context, drawD
 	 previousJackpotWon := false
 	 previousJackpotAmount := 0.0
 	 for _, prize := range previousDraw.Prizes {
-		  if prize.Category == JackpotCategory {
+		  // Use constant from models package
+		  if prize.Category == models.JackpotCategory {
 			   previousJackpotAmount = prize.Amount
 			   if prize.WinnerID != primitive.NilObjectID && prize.IsValid != nil && *prize.IsValid {
 				    previousJackpotWon = true
@@ -509,8 +552,6 @@ func (s *DrawServiceEnhanced) calculateCurrentJackpot(ctx context.Context, drawD
 		  return defaultJackpot, nil
 	 } else {
 		  // Previous jackpot was not won (or invalid), rollover the amount
-		  // Rollover logic might need refinement based on specific business rules
-		  // (e.g., does daily rollover to daily, weekly to weekly?)
 		  // Simple rollover: Add previous jackpot amount to current default
 		  return defaultJackpot + previousJackpotAmount, nil
 	 }
@@ -526,7 +567,22 @@ func (s *DrawServiceEnhanced) getRolloverSource(ctx context.Context, drawDate ti
 			   return nil, fmt.Errorf("failed to find previous completed draw for rollover source: %w", err)
 		  }
 	 }
-	 return &previousDraw.ID, nil
+	 // Check if the previous draw's jackpot was won/valid before returning its ID as source
+	 previousJackpotWon := false
+	 for _, prize := range previousDraw.Prizes {
+		  // Use constant from models package
+		  if prize.Category == models.JackpotCategory {
+			   if prize.WinnerID != primitive.NilObjectID && prize.IsValid != nil && *prize.IsValid {
+				    previousJackpotWon = true
+			   }
+			   break
+		  }
+	 }
+	 if previousJackpotWon {
+		  return nil, nil // Previous jackpot was won, so no rollover source
+	 }
+
+	 return &previousDraw.ID, nil // Return ID of the previous draw as the source
 }
 
 // getEligibilityTimeRange calculates the start and end time for participant eligibility
@@ -570,9 +626,8 @@ func (s *DrawServiceEnhanced) selectWinnerFromPool(participants []*models.User, 
 func (s *DrawServiceEnhanced) cancelDraw(ctx context.Context, draw *models.Draw, reason string) {
 	 log.Printf("Cancelling draw %s: %s", draw.ID.Hex(), reason)
 	 draw.Status = DrawStatusCancelled
+	 draw.ErrorMessage = reason // Store reason in ErrorMessage field
 	 draw.UpdatedAt = time.Now()
-	 // Add reason to draw notes or a dedicated field if available
-	 // draw.Notes = reason
 	 if err := s.drawRepo.Update(ctx, draw); err != nil {
 		  log.Printf("Error updating draw %s status to cancelled: %v", draw.ID.Hex(), err)
 	 }
@@ -580,6 +635,7 @@ func (s *DrawServiceEnhanced) cancelDraw(ctx context.Context, draw *models.Draw,
 
 // getNextDrawDate calculates the date of the next draw
 func getNextDrawDate(currentDrawDate time.Time) time.Time {
+	 // This might need adjustment based on weekly vs daily logic
 	 return currentDrawDate.AddDate(0, 0, 1) // Simple assumption: next draw is always the next day
 }
 
@@ -591,6 +647,10 @@ func maskMSISDN(msisdn string) string {
 	 // Example: Keep first 5 and last 4 digits (adjust as needed)
 	 prefixLength := 5
 	 suffixLength := 4
+	 if len(msisdn) < prefixLength+suffixLength {
+		  prefixLength = len(msisdn) / 2
+		  suffixLength = len(msisdn) - prefixLength
+	 }
 	 maskedPart := ""
 	 for i := 0; i < len(msisdn)-(prefixLength+suffixLength); i++ {
 		  maskedPart += "x"
