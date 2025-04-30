@@ -159,16 +159,15 @@ func LoggerMiddleware() gin.HandlerFunc {
 
 		// Retrieve request ID from context
 		 requestID, _ := c.Get("RequestID")
-		 requestIDStr := "unknown"
-		 if id, ok := requestID.(string); ok {
-		 	 requestIDStr = id
-		 }
+		 // requestIDStr := "unknown" // Removed as it was declared but not used
+		 // if id, ok := requestID.(string); ok {
+		 // 	 requestIDStr = id
+		 // }
 
-		// Log request details
-		// Consider using a structured logger (e.g., logrus, zap)
+		// Log request details (Consider using a structured logger)
 		// log.Printf(
 		// 	"[%s] %s %s %d %s %s",
-		// 	requestIDStr,
+		// 	requestIDStr, // This would need to be fixed if logging is uncommented
 		// 	latency,
 		// 	 c.Request.Method,
 		// 	 c.Writer.Status(),
@@ -183,7 +182,7 @@ func LoggerMiddleware() gin.HandlerFunc {
 		 if c.Writer.Status() >= http.StatusBadRequest {
 		 	 // Log errors associated with the context
 		 	 // Consider logging the full error details
-		 	 // log.Printf("[%s] Error: %s", requestIDStr, c.Errors.String())
+		 	 // log.Printf("[%s] Error: %s", requestIDStr, c.Errors.String()) // This would need requestIDStr
 		 	 // Optionally set an error header (be cautious about exposing internal errors)
 		 	 // c.Writer.Header().Set("X-Error", c.Errors.ByType(gin.ErrorTypePrivate).String())
 		 }
