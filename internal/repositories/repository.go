@@ -94,6 +94,8 @@ type DrawRepository interface {
 	FindByDate(ctx context.Context, date time.Time) (*models.Draw, error)
 	FindByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Draw, error)
 	FindByStatus(ctx context.Context, status string, page, limit int) ([]*models.Draw, error)
+	FindCompletedWithJackpot(ctx context.Context, limit int) ([]*models.Draw, error) // Added based on service usage
+	FindMostRecentCompletedBefore(ctx context.Context, date time.Time) (*models.Draw, error) // Added based on service usage
 	Create(ctx context.Context, draw *models.Draw) error
 	Update(ctx context.Context, draw *models.Draw) error
 	Delete(ctx context.Context, id primitive.ObjectID) error
@@ -160,5 +162,6 @@ type BlacklistRepository interface {
 
 // --- NOTE: You might need to add implementations for other methods in the generic Repository ---
 // --- or ensure your specific repository implementations match these interfaces. ---
+
 
 
