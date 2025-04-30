@@ -29,9 +29,6 @@ sed -i
 '/encoding\\/json/d' pkg/mtnapi/client.go || echo "Warning: Could not fix imports in pkg/mtnapi/client.go"
 sed -i 
 '/context/d' internal/middleware/middleware.go || echo "Warning: Could not fix imports in internal/middleware/middleware.go"
-# --- THIS LINE WAS REMOVING THE NEEDED MODELS IMPORT --- #
-# sed -i 
-'/github.com\\/bridgetunes\\/mtn-backend\\/internal\\/models/d' internal/handlers/draw_handler.go || echo "Warning: Could not fix imports in internal/handlers/draw_handler.go"
 sed -i 
 '/time/d' internal/handlers/notification_handler.go || echo "Warning: Could not fix imports in internal/handlers/notification_handler.go"
 sed -i 
