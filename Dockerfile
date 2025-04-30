@@ -1,12 +1,12 @@
 # Stage 1: Build the application
-FROM golang:1.21-alpine AS builder
+FROM golang:1.19.13-alpine AS builder # Using 1.19.13 as previously attempted
 
 WORKDIR /app
 
 # Copy go.mod and go.sum files first to leverage Docker cache
 COPY go.mod go.sum ./
 
-# --- NEW: Remove potential cached modules before downloading ---
+# Remove potential cached modules before downloading
 RUN rm -rf /go/pkg/mod
 
 # Download dependencies
@@ -23,9 +23,9 @@ RUN go mod tidy
 # Clean Go build cache before building
 RUN go clean -cache
 
-# Build the application from the root directory using the full package path
+# Build the application from the root directory by specifying the main.go file
 # Output the binary to /app/bridgetunes-api
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bridgetunes-api github.com/bridgetunes/mtn-backend/cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/bridgetunes-api ./cmd/api/main.go
 
 # Stage 2: Create the final lightweight image
 FROM alpine:latest
