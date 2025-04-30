@@ -112,7 +112,11 @@ func (s *DrawServiceEnhanced) GetPrizeStructure(ctx context.Context, drawType st
 	 // Note: This assumes the value is stored correctly. Consider more robust validation.
 	 prizeStructureRaw, ok := config.Value.([]interface{})
 	 if !ok {
-		  log.Printf("Error: Invalid prize structure format (not a slice) in config for key %s", prizeKey)
+		  // Attempt to handle if it's already the correct type (e.g., from UpdatePrizeStructure)
+		  if ps, ok := config.Value.([]models.PrizeStructure); ok {
+			   return ps, nil
+		  }
+		  log.Printf("Error: Invalid prize structure format (not a slice or []models.PrizeStructure) in config for key %s", prizeKey)
 		  return getDefaultPrizeStructure(drawType), fmt.Errorf("invalid prize structure format in config")
 	 }
 
@@ -120,16 +124,22 @@ func (s *DrawServiceEnhanced) GetPrizeStructure(ctx context.Context, drawType st
 	 for _, item := range prizeStructureRaw {
 		  itemMap, ok := item.(map[string]interface{})
 		  if !ok {
-			   log.Printf("Error: Invalid prize structure item format (not a map) in config for key %s", prizeKey)
-			   return getDefaultPrizeStructure(drawType), fmt.Errorf("invalid prize structure item format in config")
+			   // Handle primitive.M case from MongoDB BSON decoding
+			   if itemPrimM, ok := item.(primitive.M); ok {
+				    itemMap = itemPrimM
+			   } else {
+				    log.Printf("Error: Invalid prize structure item format (not a map or primitive.M) in config for key %s", prizeKey)
+				    return getDefaultPrizeStructure(drawType), fmt.Errorf("invalid prize structure item format in config")
+			   }
 		  }
 		  // Manual conversion - consider using a library like mapstructure for complex cases
 		  ps := models.PrizeStructure{}
 		  if cat, ok := itemMap["category"].(string); ok { ps.Category = cat }
 		  if amt, ok := itemMap["amount"].(float64); ok { ps.Amount = amt }
-		  if cnt, ok := itemMap["count"].(float64); ok { ps.Count = int(cnt) } // BSON might decode numbers as float64
-		  if cnt, ok := itemMap["count"].(int32); ok { ps.Count = int(cnt) } // Or int32
-		  if cnt, ok := itemMap["count"].(int64); ok { ps.Count = int(cnt) } // Or int64
+		  // Handle different numeric types from BSON
+		  if cnt, ok := itemMap["count"].(float64); ok { ps.Count = int(cnt) }
+		  if cnt, ok := itemMap["count"].(int32); ok { ps.Count = int(cnt) }
+		  if cnt, ok := itemMap["count"].(int64); ok { ps.Count = int(cnt) }
 		  // Add other fields like Tier, Description if needed
 		  prizeStructure = append(prizeStructure, ps)
 	 }
@@ -162,9 +172,9 @@ func (s *DrawServiceEnhanced) UpdatePrizeStructure(ctx context.Context, drawType
 	 return s.configRepo.Update(ctx, config)
 }
 
-// ScheduleDraw schedules a new draw
-func (s *DrawServiceEnhanced) ScheduleDraw(ctx context.Context, drawDate time.Time, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error) {
-	 drawType := getDrawType(drawDate)
+// ScheduleDraw schedules a new draw - Updated signature to match interface
+func (s *DrawServiceEnhanced) ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error) {
+	 // drawType is now passed as a parameter, removed internal getDrawType call
 
 	 if useDefaultDigits {
 		  eligibleDigits = getRecommendedDigits(drawDate)
@@ -228,7 +238,7 @@ func (s *DrawServiceEnhanced) ScheduleDraw(ctx context.Context, drawDate time.Ti
 
 	 draw := &models.Draw{
 		  DrawDate:       drawDate,
-		  DrawType:       drawType,
+		  DrawType:       drawType, // Use parameter
 		  EligibleDigits: eligibleDigits,
 		  Status:         DrawStatusScheduled,
 		  Prizes:         prizes,
@@ -409,26 +419,31 @@ func (s *DrawServiceEnhanced) GetDrawByID(ctx context.Context, drawID primitive.
 	 return s.drawRepo.FindByID(ctx, drawID)
 }
 
-// GetDrawWinners retrieves the winners for a specific draw
-func (s *DrawServiceEnhanced) GetDrawWinners(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
+// GetWinnersByDrawID retrieves the winners for a specific draw - Updated name to match interface
+func (s *DrawServiceEnhanced) GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
 	 // Added default pagination (page=0, limit=0) to match interface/implementation
 	 // Assuming page=0, limit=0 means "no pagination" in the repository layer
 	 return s.winnerRepo.FindByDrawID(ctx, drawID, 0, 0)
 }
 
-// GetJackpotHistory retrieves the history of jackpot amounts
-func (s *DrawServiceEnhanced) GetJackpotHistory(ctx context.Context, limit int) ([]models.JackpotHistoryEntry, error) {
-	 // 1. Get completed draws with Jackpot prizes, sorted by date descending
-	 draws, err := s.drawRepo.FindCompletedWithJackpot(ctx, limit)
+// GetJackpotHistory retrieves the history of jackpot amounts - Updated signature and logic to match interface
+func (s *DrawServiceEnhanced) GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	 // 1. Get draws within the date range
+	 // Assuming page=0, limit=0 means "no pagination"
+	 draws, err := s.drawRepo.FindByDateRange(ctx, startDate, endDate, 0, 0)
 	 if err != nil {
-		  return nil, fmt.Errorf("failed to get completed jackpot draws: %w", err)
+		  return nil, fmt.Errorf("failed to get draws for jackpot history: %w", err)
 	 }
 
-	 history := []models.JackpotHistoryEntry{}
+	 history := []map[string]interface{}{}
 	 for _, draw := range draws {
+		  // Only include completed draws
+		  if draw.Status != models.DrawStatusCompleted {
+			   continue
+		  }
+
 		  var jackpotPrize *models.Prize
 		  for i := range draw.Prizes {
-			   // Use constant from models package
 			   if draw.Prizes[i].Category == models.JackpotCategory {
 				    jackpotPrize = &draw.Prizes[i]
 				    break
@@ -436,27 +451,35 @@ func (s *DrawServiceEnhanced) GetJackpotHistory(ctx context.Context, limit int) 
 		  }
 
 		  if jackpotPrize == nil {
-			   log.Printf("Warning: Draw %s completed but no jackpot prize found?", draw.ID.Hex())
+			   log.Printf("Warning: Completed Draw %s has no jackpot prize? Skipping in history.", draw.ID.Hex())
 			   continue
 		  }
 
-		  entry := models.JackpotHistoryEntry{
-			   DrawDate:     draw.DrawDate,
-			   JackpotAmount: jackpotPrize.Amount,
-			   Won:          jackpotPrize.WinnerID != primitive.NilObjectID && jackpotPrize.IsValid != nil && *jackpotPrize.IsValid,
+		  entry := map[string]interface{}{
+			   "drawDate":     draw.DrawDate,
+			   "jackpotAmount": jackpotPrize.Amount,
+			   "won":          jackpotPrize.WinnerID != primitive.NilObjectID && jackpotPrize.IsValid != nil && *jackpotPrize.IsValid,
+			   "winnerMsisdn": nil, // Default to nil
 		  }
 
-		  if entry.Won {
+		  if entry["won"].(bool) {
 			   winner, err := s.winnerRepo.FindByID(ctx, jackpotPrize.WinnerID)
 			   if err != nil {
-				    log.Printf("Error fetching winner %s for draw %s: %v", jackpotPrize.WinnerID.Hex(), draw.ID.Hex(), err)
+				    log.Printf("Error fetching winner %s for draw %s history: %v", jackpotPrize.WinnerID.Hex(), draw.ID.Hex(), err)
 				    // Still include history entry, just without winner info
 			   } else {
-				    entry.WinnerMSISDN = winner.MaskedMSISDN
+				    entry["winnerMsisdn"] = winner.MaskedMSISDN
 			   }
 		  }
 		  history = append(history, entry)
 	 }
+
+	 // Sort history by date descending (optional, but often useful for history)
+	 sort.Slice(history, func(i, j int) bool {
+		  dateI, _ := history[i]["drawDate"].(time.Time)
+		  dateJ, _ := history[j]["drawDate"].(time.Time)
+		  return dateI.After(dateJ)
+	 })
 
 	 return history, nil
 }
