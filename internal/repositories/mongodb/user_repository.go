@@ -2,6 +2,9 @@ package mongodb
 
 import (
 	"context"
+	"errors" // Added for error handling
+	"strconv" // Added for Itoa
+	"strings" // Added for Join
 	"time"
 
 	"github.com/bridgetunes/mtn-backend/internal/models"
@@ -27,84 +30,100 @@ func NewUserRepository(db *mongo.Database) repositories.UserRepository {
 // FindByID finds a user by ID
 func (r *UserRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*models.User, error) {
 	var user models.User
+
 	 err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
 	 if err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
+
 	 return &user, nil
 }
 
 // FindByMSISDN finds a user by MSISDN
 func (r *UserRepository) FindByMSISDN(ctx context.Context, msisdn string) (*models.User, error) {
 	var user models.User
+
 	 err := r.collection.FindOne(ctx, bson.M{"msisdn": msisdn}).Decode(&user)
 	 if err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
+
 	 return &user, nil
 }
 
 // FindAll finds all users with pagination
 func (r *UserRepository) FindAll(ctx context.Context, page, limit int) ([]*models.User, error) {
 	 opts := options.Find().SetSkip(int64((page - 1) * limit)).SetLimit(int64(limit))
+
 	 cursor, err := r.collection.Find(ctx, bson.M{}, opts)
 	 if err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
 	 defer cursor.Close(ctx)
 
 	 var users []*models.User
 	 if err := cursor.All(ctx, &users); err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
+
 	 return users, nil
 }
 
 // FindByOptInStatus finds users by opt-in status with pagination
 func (r *UserRepository) FindByOptInStatus(ctx context.Context, optInStatus bool, page, limit int) ([]*models.User, error) {
 	 opts := options.Find().SetSkip(int64((page - 1) * limit)).SetLimit(int64(limit))
+
 	 cursor, err := r.collection.Find(ctx, bson.M{"optInStatus": optInStatus}, opts)
 	 if err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
 	 defer cursor.Close(ctx)
 
 	 var users []*models.User
 	 if err := cursor.All(ctx, &users); err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
+
 	 return users, nil
 }
 
 // FindByEligibleDigits finds users by eligible digits (last digits of MSISDN)
 func (r *UserRepository) FindByEligibleDigits(ctx context.Context, digits []int, optInStatus bool) ([]*models.User, error) {
-	 // Convert digits to strings for regex matching
+	// Handle empty digits slice
+	 if len(digits) == 0 {
+		 return []*models.User{}, nil // Return empty slice, no users match
+	}
+
+	// Convert digits to strings for regex matching
 	 var digitStrings []string
 	 for _, digit := range digits {
-	 	 digitStrings = append(digitStrings, string(rune("0"+digit)))
-	 }
+		 if digit < 0 || digit > 9 {
+			 return nil, errors.New("invalid digit provided") // Basic validation
+		}
+		 // Correctly convert int digit to string using strconv.Itoa
+		 digitStrings = append(digitStrings, strconv.Itoa(digit))
+	}
 
-	 // Create regex pattern for matching last digit
-	 regexPattern := "(" + string(digitStrings[0])
-	 for i := 1; i < len(digitStrings); i++ {
-	 	 regexPattern += "|" + string(digitStrings[i])
-	 }
-	 regexPattern += ")$"
+	// Create regex pattern for matching last digit (e.g., "(0|1|5)$" )
+	 regexPattern := "(" + strings.Join(digitStrings, "|") + ")$"
 
-	 // Find users with matching last digit and opt-in status
-	 cursor, err := r.collection.Find(ctx, bson.M{
-	 	 "msisdn":      bson.M{"regex": regexPattern},
-	 	 "optInStatus": optInStatus,
-	 })
+	// Find users with matching last digit and opt-in status
+	 filter := bson.M{
+		"msisdn":      bson.M{"regex": regexPattern},
+		"optInStatus": optInStatus,
+	}
+
+	 cursor, err := r.collection.Find(ctx, filter)
 	 if err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
 	 defer cursor.Close(ctx)
 
 	 var users []*models.User
 	 if err := cursor.All(ctx, &users); err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
+
 	 return users, nil
 }
 
@@ -113,22 +132,24 @@ func (r *UserRepository) FindByRechargeTimeRange(ctx context.Context, start, end
 	// This assumes the User model has a field like LastRechargeDate or similar.
 	// If recharge info is in a separate Topup collection, this logic needs adjustment.
 	// For now, assuming User has LastRechargeDate.
-	filter := bson.M{
+	 filter := bson.M{
 		"lastRechargeDate": bson.M{
 			"$gte": start,
 			"$lt":  end,
 		},
 	}
-	cursor, err := r.collection.Find(ctx, filter)
+
+	 cursor, err := r.collection.Find(ctx, filter)
 	 if err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
 	 defer cursor.Close(ctx)
 
 	 var users []*models.User
 	 if err := cursor.All(ctx, &users); err != nil {
-	 	return nil, err
-	 }
+		 return nil, err
+	}
+
 	 return users, nil
 }
 
@@ -157,5 +178,4 @@ func (r *UserRepository) Delete(ctx context.Context, id primitive.ObjectID) erro
 func (r *UserRepository) Count(ctx context.Context) (int64, error) {
 	 return r.collection.CountDocuments(ctx, bson.M{})
 }
-
 
