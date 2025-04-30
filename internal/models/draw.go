@@ -20,7 +20,7 @@ type Draw struct {
 	OptedInParticipants int                `bson:"optedInParticipants,omitempty" json:"optedInParticipants,omitempty"` // Added based on potential need
 	Prizes              []Prize            `bson:"prizes" json:"prizes"`
 	JackpotAmount       float64            `bson:"jackpotAmount" json:"jackpotAmount"` // Calculated jackpot for this draw
-	RolloverSource      []RolloverInfo     `bson:"rolloverSource,omitempty" json:"rolloverSource,omitempty"` // Info about rollovers contributing to this draw
+	RolloverSource      *primitive.ObjectID `bson:"rolloverSource,omitempty" json:"rolloverSource,omitempty"` // Changed type from []RolloverInfo based on service usage
 	RolloverTarget      *primitive.ObjectID `bson:"rolloverTarget,omitempty" json:"rolloverTarget,omitempty"` // ID of the draw this jackpot rolled over to (if applicable)
 	ExecutionTime       time.Time          `bson:"executionTime,omitempty" json:"executionTime,omitempty"` // Added based on handler code
 	ErrorMessage        string             `bson:"errorMessage,omitempty" json:"errorMessage,omitempty"` // Added based on handler code
@@ -40,13 +40,14 @@ type Prize struct {
 	IsValid     *bool              `bson:"isValid,omitempty" json:"isValid,omitempty"` // Added based on potential need/previous versions
 }
 
-// RolloverInfo tracks jackpot rollovers contributing to a draw
-// Added based on service error 'undefined: models.RolloverInfo'
+// RolloverInfo struct removed as RolloverSource in Draw is now *primitive.ObjectID
+/*
 type RolloverInfo struct {
 	SourceDrawID primitive.ObjectID `bson:"sourceDrawId" json:"sourceDrawId"`
 	Amount       float64            `bson:"amount" json:"amount"`
 	Reason       string             `bson:"reason" json:"reason"` // e.g., "INVALID_WINNER"
 }
+*/
 
 // SystemConfig stores system configuration values
 // Includes 'UpdatedAt' field based on utils layer errors
@@ -70,16 +71,24 @@ type PrizeStructure struct {
 	// NumWinners  int     `bson:"num_winners" json:"num_winners"` // Original field from repo, potentially replaced by Count?
 }
 
-// JackpotHistory stores records of jackpot amounts over time
-// Kept from repo version
-type JackpotHistory struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	Date      time.Time          `bson:"date" json:"date"`
-	Amount    float64            `bson:"amount" json:"amount"`
-	DrawType  string             `bson:"draw_type" json:"draw_type"` // DAILY or SATURDAY
-	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
+// JackpotHistoryEntry stores records of jackpot amounts over time
+// Renamed from JackpotHistory and added fields based on service usage
+type JackpotHistoryEntry struct {
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	DrawDate      time.Time          `bson:"drawDate" json:"drawDate"` // Changed from Date
+	JackpotAmount float64            `bson:"jackpotAmount" json:"jackpotAmount"` // Changed from Amount
+	Won           bool               `bson:"won" json:"won"` // Added based on service usage
+	WinnerMSISDN  string             `bson:"winnerMsisdn,omitempty" json:"winnerMsisdn,omitempty"` // Added based on service usage
+	// DrawType  string             `bson:"draw_type" json:"draw_type"` // Removed, DrawDate implies type
+	// CreatedAt time.Time          `bson:"created_at" json:"created_at"` // Removed, DrawDate is sufficient?
 }
 
 // Note: The Winner struct is assumed to be correctly defined in internal/models/winner.go
 
+// Constants for Draw Status and Prize Categories (assuming they are defined here or elsewhere)
+const (
+	DrawStatusCompleted = "COMPLETED"
+	JackpotCategory     = "JACKPOT"
+	// Add other status/category constants if needed
+)
 
