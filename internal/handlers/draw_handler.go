@@ -13,16 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 ) 
 
-// --- DIAGNOSTIC: Moved PrizeStructure definition here ---
-// PrizeStructure defines the structure for a specific prize tier
-type PrizeStructure struct {
-	Tier        int     `json:"tier" bson:"tier" binding:"required"`
-	Description string  `json:"description" bson:"description" binding:"required"`
-	Amount      float64 `json:"amount" bson:"amount" binding:"required"`
-	NumWinners  int     `json:"num_winners" bson:"num_winners" binding:"required"`
-}
-// --- END DIAGNOSTIC MOVE ---
-
 // DrawHandler handles draw-related HTTP requests
 type DrawHandler struct {
 	// Use the interface type directly, not a pointer
@@ -133,27 +123,19 @@ func (h *DrawHandler) GetPrizeStructure(c *gin.Context) {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": "Missing draw_type query parameter"}) 
 		 return
 	 }
-	 // Need to adjust the service call if it expects models.PrizeStructure
-	 // For now, let's assume the service layer might need adjustment later
-	 // or perhaps it returns an interface{} that can be cast.
-	 // This handler primarily deals with the request/response shape.
 	 structure, err := h.drawService.GetPrizeStructure(c, drawType)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get prize structure: " + err.Error()  })
 		 return
 	 }
-	 // Assuming structure is []models.PrizeStructure or similar that needs casting
-	 // For the build test, we might just return it directly if possible,
-	 // or return a placeholder if the types are incompatible now.
-	 // Let's return it directly and see if the build passes.
 	 c.JSON(http.StatusOK, structure) 
 }
 
 // Define the request structure outside the function
 type UpdatePrizeStructureRequest struct {
-	DrawType  string           `json:"draw_type" binding:"required"`
-	// Use the locally defined PrizeStructure
-	Structure []PrizeStructure `json:"structure" binding:"required"`
+	DrawType  string                 `json:"draw_type" binding:"required"`
+	// Expects PrizeStructure from the models package
+	Structure []models.PrizeStructure `json:"structure" binding:"required"` 
 }
 
 // UpdatePrizeStructure handles PUT /draws/prize-structure
@@ -163,27 +145,8 @@ func (h *DrawHandler) UpdatePrizeStructure(c *gin.Context) {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()  })
 		 return
 	 }
-
-	 // --- IMPORTANT ADJUSTMENT NEEDED HERE ---
-	 // The service layer (h.drawService.UpdatePrizeStructure) likely expects
-	 // []models.PrizeStructure. We now have []handlers.PrizeStructure.
-	 // We need to convert the slice type before calling the service.
-	 serviceStructure := make([]models.PrizeStructure, len(request.Structure))
-	 for i, item := range request.Structure {
-		 // This conversion assumes the fields are identical.
-		 // If models.PrizeStructure changes, this needs updating.
-		 serviceStructure[i] = models.PrizeStructure{
-			 Tier:        item.Tier,
-			 Description: item.Description,
-			 Amount:      item.Amount,
-			 NumWinners:  item.NumWinners,
-		 }
-	 }
-
-	 // Call the service with the converted slice
-	 err := h.drawService.UpdatePrizeStructure(c, request.DrawType, serviceStructure)
-	 // --- END ADJUSTMENT ---
-
+	 // Pass the structure directly to the service (assuming it expects []models.PrizeStructure)
+	 err := h.drawService.UpdatePrizeStructure(c, request.DrawType, request.Structure)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prize structure: " + err.Error()  })
 		 return
@@ -263,5 +226,4 @@ func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 	 }
 	 c.JSON(http.StatusOK, history) 
 }
-
 
