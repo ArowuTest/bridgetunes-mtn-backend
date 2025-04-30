@@ -18,14 +18,13 @@ import (
 func main() {
 	// Connect to MongoDB
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// --- Use environment variables --- 
-	mongoURI := os.Getenv("MONGO_URI")
+	defer cancel()	// --- Use environment variables --- 
+	// Use MONGODB_URI to match Render settings
+	 mongoURI := os.Getenv("MONGODB_URI")
 	 if mongoURI == "" {
-		log.Println("WARNING: MONGO_URI environment variable not set. Using default.")
+		log.Println("WARNING: MONGODB_URI environment variable not set. Using default.")
 		// Fallback, but this likely won't work in Render if the env var isn't set correctly
-		mongoURI = "mongodb://mongodb:27017" 
+		 mongoURI = "mongodb://mongodb:27017" 
 	}
 
 	 dbName := os.Getenv("MONGO_DB_NAME")
@@ -113,5 +112,6 @@ func main() {
         log.Fatalf("Failed to start server: %v", err)
     }
 }
+
 
 
