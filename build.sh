@@ -24,6 +24,7 @@ go get golang.org/x/crypto/bcrypt
 go mod tidy
 
 # Fix unused imports in problematic files (without modifying existing code)
+# Ensure sed commands are on a single line without newline after -i
 echo "Fixing unused imports in problematic files..."
 sed -i 
 '/encoding\\/json/d' pkg/mtnapi/client.go || echo "Warning: Could not fix imports in pkg/mtnapi/client.go"
