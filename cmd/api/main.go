@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"log"
-	// "net/http" // Removed unused import
+	"os" // Import os package
 	"time"
 
 	"github.com/bridgetunes/mtn-backend/internal/handlers"
@@ -20,30 +20,31 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Use environment variables in production
-	// TODO: Replace with configuration loading (e.g., Viper)
-	// mongoURI := os.Getenv("MONGO_URI")
-	// if mongoURI == "" {
-	// 	 mongoURI = "mongodb://mongodb:27017"
-	// }
-	// dbName := os.Getenv("MONGO_DB_NAME")
-	// if dbName == "" {
-	// 	 dbName = "bridgetunes"
-	// }
-	// port := os.Getenv("PORT")
-	// if port == "" {
-	// 	 port = ":8080"
-	// }
+	// --- Use environment variables --- 
+	mongoURI := os.Getenv("MONGO_URI")
+	 if mongoURI == "" {
+		log.Println("WARNING: MONGO_URI environment variable not set. Using default.")
+		// Fallback, but this likely won't work in Render if the env var isn't set correctly
+		mongoURI = "mongodb://mongodb:27017" 
+	}
 
-	// --- Hardcoded values for now ---
-	 mongoURI := "mongodb://mongodb:27017"
-	 dbName := "bridgetunes"
-	 port := ":8080"
-	// --- End Hardcoded values ---
+	 dbName := os.Getenv("MONGO_DB_NAME")
+	 if dbName == "" {
+		log.Println("WARNING: MONGO_DB_NAME environment variable not set. Using default 'bridgetunes'.")
+		 dbName = "bridgetunes"
+	}
+
+	 port := os.Getenv("PORT")
+	 if port == "" {
+		log.Println("WARNING: PORT environment variable not set. Using default ':8080'.")
+		 port = "8080" // Render expects just the port number, not the colon
+	}
+	 port = ":" + port // Add the colon for Gin
+	// --- End Environment Variables ---
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	 if err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %v", err)
+		log.Fatalf("Failed to connect to MongoDB using URI %s: %v", mongoURI, err)
 	}
 	defer func() {
 		 if err = client.Disconnect(context.Background()); err != nil {
@@ -112,4 +113,5 @@ func main() {
         log.Fatalf("Failed to start server: %v", err)
     }
 }
+
 
