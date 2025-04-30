@@ -37,8 +37,8 @@ func (r *CampaignRepository) FindByID(ctx context.Context, id primitive.ObjectID
 }
 
 // FindByStatus finds campaigns by status with pagination
-// Note: Changed return type from []*models.Campaign to []models.Campaign to match interface (assuming interface requires value slice)
-func (r *CampaignRepository) FindByStatus(ctx context.Context, status string, page, limit int) ([]models.Campaign, error) {
+// Note: Reverted return type back to []*models.Campaign to match interface
+func (r *CampaignRepository) FindByStatus(ctx context.Context, status string, page, limit int) ([]*models.Campaign, error) {
 	 opts := options.Find().
 		 SetSkip(int64((page - 1) * limit)).
 		 SetLimit(int64(limit)).
@@ -50,7 +50,7 @@ func (r *CampaignRepository) FindByStatus(ctx context.Context, status string, pa
 	}
 	 defer cursor.Close(ctx)
 
-	 var campaigns []models.Campaign // Changed from []*models.Campaign
+	 var campaigns []*models.Campaign // Reverted back to pointer slice
 	 if err := cursor.All(ctx, &campaigns); err != nil {
 		 return nil, err
 	}
@@ -59,8 +59,8 @@ func (r *CampaignRepository) FindByStatus(ctx context.Context, status string, pa
 }
 
 // FindAll finds all campaigns with pagination
-// Note: Changed return type from []*models.Campaign to []models.Campaign to match interface
-func (r *CampaignRepository) FindAll(ctx context.Context, page, limit int) ([]models.Campaign, error) {
+// Note: Reverted return type back to []*models.Campaign to match interface
+func (r *CampaignRepository) FindAll(ctx context.Context, page, limit int) ([]*models.Campaign, error) {
 	 opts := options.Find().
 		 SetSkip(int64((page - 1) * limit)).
 		 SetLimit(int64(limit)).
@@ -72,7 +72,7 @@ func (r *CampaignRepository) FindAll(ctx context.Context, page, limit int) ([]mo
 	}
 	 defer cursor.Close(ctx)
 
-	 var campaigns []models.Campaign // Changed from []*models.Campaign
+	 var campaigns []*models.Campaign // Reverted back to pointer slice
 	 if err := cursor.All(ctx, &campaigns); err != nil {
 		 return nil, err
 	}
