@@ -16,7 +16,7 @@ services:
   # Backend API service
   backend:
     build:
-      context: ./bridgetunes-mtn-backend
+      context: ./bridgetunes-mtn-backend # Assumes docker-compose.yml is one level up
       dockerfile: Dockerfile
     container_name: bridgetunes-backend
     ports:
@@ -24,8 +24,12 @@ services:
     depends_on:
       - mongodb
     environment:
-      - MONGO_URI=mongodb://mongodb:27017
-      - DB_NAME=bridgetunes
+      # Use MONGODB_URI to match the code
+      - MONGODB_URI=mongodb://mongodb:27017 # This value is for connecting to the Compose MongoDB service
+      # Use MONGO_DB_NAME to match the code
+      - MONGO_DB_NAME=bridgetunes
+      # Add PORT variable as the code now reads it
+      - PORT=8080
     networks:
       - bridgetunes-network
     restart: unless-stopped
@@ -33,7 +37,7 @@ services:
   # Frontend service
   frontend:
     build:
-      context: ./bridgetunes-fixed-imports
+      context: ./bridgetunes-fixed-imports # Assumes frontend code is in this directory relative to docker-compose.yml
       dockerfile: Dockerfile
     container_name: bridgetunes-frontend
     ports:
@@ -41,6 +45,7 @@ services:
     depends_on:
       - backend
     environment:
+      # Consider using http://backend:8080/api/v1 if frontend needs to access backend via Docker network
       - REACT_APP_API_URL=http://localhost:8080/api/v1
     networks:
       - bridgetunes-network
