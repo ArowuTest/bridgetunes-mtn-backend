@@ -172,8 +172,8 @@ func (h *DrawHandlerEnhanced) GetDrawByID(c *gin.Context) {
 	 c.JSON(http.StatusOK, draw)
 }
 
-// GetDrawWinners handles GET /draws/:id/winners
-func (h *DrawHandlerEnhanced) GetDrawWinners(c *gin.Context) {
+// GetWinnersByDrawID handles GET /draws/:id/winners
+func (h *DrawHandlerEnhanced) GetWinnersByDrawID(c *gin.Context) {
 	// Parse ID from URL
 	 drawIDStr := c.Param("id") // Renamed to avoid conflict if uncommenting below
 	 drawID, err := primitive.ObjectIDFromHex(drawIDStr)
