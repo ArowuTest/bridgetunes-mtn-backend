@@ -284,8 +284,11 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 		 return
 	}
 
-	// Update template
-	 err = h.notificationService.UpdateTemplate(c, id, &template)
+	// Set the ID on the template object from the URL parameter
+	 template.ID = id
+
+	// Update template - Removed the 'id' argument from the call as it's part of the template object
+	 err = h.notificationService.UpdateTemplate(c, &template)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update template: " + err.Error() })
 		 return
