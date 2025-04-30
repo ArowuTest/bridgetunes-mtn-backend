@@ -23,16 +23,19 @@ go get golang.org/x/crypto/bcrypt
 # Run go mod tidy to clean up dependencies
 go mod tidy
 
-# Fix unused imports in problematic files (without modifying existing code)
-# Ensure sed commands are on a single line without newline after -i
-echo "Fixing unused imports in problematic files..."
-sed -i 
+# Removed the problematic sed commands for fixing imports
+# echo "Fixing unused imports in problematic files..."
+# sed -i 
+# 
 '/encoding\\/json/d' pkg/mtnapi/client.go || echo "Warning: Could not fix imports in pkg/mtnapi/client.go"
-sed -i 
+# sed -i 
+# 
 '/context/d' internal/middleware/middleware.go || echo "Warning: Could not fix imports in internal/middleware/middleware.go"
-sed -i 
+# sed -i 
+# 
 '/time/d' internal/handlers/notification_handler.go || echo "Warning: Could not fix imports in internal/handlers/notification_handler.go"
-sed -i 
+# sed -i 
+# 
 '/time/d' internal/handlers/user_handler.go || echo "Warning: Could not fix imports in internal/handlers/user_handler.go"
 
 # Create necessary directories with verbose output
