@@ -56,3 +56,4 @@ require (
 )
 
 
+replace github.com/bridgetunes/mtn-backend => ./
