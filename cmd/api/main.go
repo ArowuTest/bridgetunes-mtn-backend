@@ -3,115 +3,112 @@ package main
 import (
 	"context"
 	"log"
-	"os" // Import os package
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/internal/handlers"
-	"github.com/bridgetunes/mtn-backend/internal/repositories/mongodb"
-	"github.com/bridgetunes/mtn-backend/internal/services"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/api/routes"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/config"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/database"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/handlers"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repository"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/services"
+	// "github.com/gin-contrib/cors" // No longer needed here, handled in routes.go
+	// "github.com/gin-gonic/gin" // No longer needed here, handled in routes.go
 )
 
 func main() {
+	// Load configuration
+	cfg, err := config.LoadConfig(".") // Load from current directory or specify path
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
 	// Connect to MongoDB
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()	// --- Use environment variables --- 
-	// Use MONGODB_URI to match Render settings
-	 mongoURI := os.Getenv("MONGODB_URI")
-	 if mongoURI == "" {
-		log.Println("WARNING: MONGODB_URI environment variable not set. Using default.")
-		// Fallback, but this likely won't work in Render if the env var isn't set correctly
-		 mongoURI = "mongodb://mongodb:27017" 
-	}
-
-	 dbName := os.Getenv("MONGO_DB_NAME")
-	 if dbName == "" {
-		log.Println("WARNING: MONGO_DB_NAME environment variable not set. Using default 'bridgetunes'.")
-		 dbName = "bridgetunes"
-	}
-
-	 port := os.Getenv("PORT")
-	 if port == "" {
-		log.Println("WARNING: PORT environment variable not set. Using default ':8080'.")
-		 port = "8080" // Render expects just the port number, not the colon
-	}
-	 port = ":" + port // Add the colon for Gin
-	// --- End Environment Variables ---
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-	 if err != nil {
-		log.Fatalf("Failed to connect to MongoDB using URI %s: %v", mongoURI, err)
+	mongoClient, err := database.ConnectDB(cfg)
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	defer func() {
-		 if err = client.Disconnect(context.Background()); err != nil {
-			 log.Printf("Error disconnecting from MongoDB: %v", err)
-		 }
+		if err = mongoClient.Disconnect(context.Background()); err != nil {
+			log.Printf("Error disconnecting from MongoDB: %v", err)
+		}
 	}()
 
-	// Ping MongoDB to verify connection
-	 if err := client.Ping(ctx, nil); err != nil {
-		log.Fatalf("Failed to ping MongoDB: %v", err)
-	}
-	log.Println("Connected to MongoDB")
+	// Initialize Database (Get the specific database instance)
+	db := mongoClient.Database(cfg.MongoDB.DBName)
 
-	// Initialize database
-    db := client.Database(dbName)
+	// Initialize Repositories
+	userRepo := repository.NewUserRepository(db)
+	drawRepo := repository.NewDrawRepository(db)
+	topupRepo := repository.NewTopupRepository(db)
+	notificationRepo := repository.NewNotificationRepository(db)
+	// Add other repositories as needed
 
-	// Initialize repositories needed for DrawService
-	userRepo := mongodb.NewUserRepository(db)
-	 drawRepo := mongodb.NewDrawRepository(db)
-    winnerRepo := mongodb.NewWinnerRepository(db)
-    configRepo := mongodb.NewSystemConfigRepository(db)
-    topupRepo := mongodb.NewTopupRepository(db) // Assuming this exists and is needed by DrawServiceEnhanced
+	// Initialize Services
+	// Assuming AuthService needs UserRepository and config for JWT
+	authService := services.NewAuthService(userRepo, cfg)
+	// Assuming DrawService needs DrawRepository
+	drawService := services.NewDrawService(drawRepo)
+	// Assuming TopupService needs TopupRepository
+	topupService := services.NewTopupService(topupRepo)
+	// Assuming NotificationService needs NotificationRepository
+	notificationService := services.NewNotificationService(notificationRepo)
+	// Assuming UserService needs UserRepository
+	userService := services.NewUserService(userRepo)
+	// Add other services as needed
 
-	// Initialize only the services needed by active handlers
-    var drawService services.DrawService // Use the interface type
-    drawService = services.NewDrawServiceEnhanced(drawRepo, userRepo, winnerRepo, configRepo, topupRepo)
+	// Initialize Handlers
+	authHandler := handlers.NewAuthHandler(authService)
+	drawHandler := handlers.NewDrawHandler(drawService) // Use the standard DrawHandler
+	topupHandler := handlers.NewTopupHandler(topupService)
+	notificationHandler := handlers.NewNotificationHandler(notificationService)
+	userHandler := handlers.NewUserHandler(userService)
+	// Add other handlers as needed
 
-	// Initialize only the handlers needed for the defined routes
-    drawHandler := handlers.NewDrawHandlerEnhanced(drawService)
-
-	// Initialize router
-	router := gin.Default()
-
-	// Configure CORS
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"}, // Allow all origins for now, restrict in production
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
-
-	// API routes
-	api := router.Group("/api/v1")
-	{
-		// Draw management routes
-        draws := api.Group("/draws")
-        {
-            // Assuming these methods exist in drawHandler and match the service interface
-            // draws.GET("/config", drawHandler.GetDrawConfig)
-            // draws.GET("/prize-structure", drawHandler.GetPrizeStructure)
-            // draws.PUT("/prize-structure", drawHandler.UpdatePrizeStructure)
-            // draws.POST("", drawHandler.ScheduleDraw)
-            draws.GET("", drawHandler.GetDraws)
-            // draws.GET("/:id", drawHandler.GetDrawByID)
-            // draws.POST("/:id/execute", drawHandler.ExecuteDraw)
-            draws.GET("/:id/winners", drawHandler.GetWinnersByDrawID) // Use corrected method name
-            draws.GET("/jackpot-history", drawHandler.GetJackpotHistory)
-        }
+	// Create Handler Dependencies struct
+	handlerDeps := routes.HandlerDependencies{
+		AuthHandler:        authHandler,
+		UserHandler:        userHandler,
+		DrawHandler:        drawHandler,
+		TopupHandler:       topupHandler,
+		NotificationHandler: notificationHandler,
 	}
 
-	// Start server
-	log.Printf("Server running on port %s", port)
-    if err := router.Run(port); err != nil {
-        log.Fatalf("Failed to start server: %v", err)
-    }
+	// Setup Router using the centralized function from routes package
+	router := routes.SetupRouter(cfg, handlerDeps)
+
+	// Start the server
+	srv := &http.Server{
+		Addr:    ":" + cfg.Server.Port,
+		Handler: router,
+	}
+
+	log.Printf("Server starting on port %s", cfg.Server.Port)
+
+	// Run server in a goroutine so that it doesn't block
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// The context is used to inform the server it has 5 seconds to finish
+	// the requests it is currently handling
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown: ", err)
+	}
+
+	log.Println("Server exiting")
 }
-
-
 
