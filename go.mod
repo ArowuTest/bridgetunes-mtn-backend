@@ -1,4 +1,4 @@
-module github.com/bridgetunes/mtn-backend
+module github.com/ArowuTest/bridgetunes-mtn-backend
 
 go 1.19
 
