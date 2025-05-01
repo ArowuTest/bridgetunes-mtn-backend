@@ -7,8 +7,8 @@ import (
 	"strings" // Added for Join
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/internal/models"
-	"github.com/bridgetunes/mtn-backend/internal/repositories"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"

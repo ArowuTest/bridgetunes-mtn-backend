@@ -5,9 +5,9 @@ import (
 	"math" // Import math package for Floor
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/internal/models"
-	"github.com/bridgetunes/mtn-backend/internal/repositories"
-	"github.com/bridgetunes/mtn-backend/pkg/mtnapi"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/mtnapi"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/internal/models"
-	"github.com/bridgetunes/mtn-backend/internal/utils"
-	"github.com/bridgetunes/mtn-backend/pkg/mongodb"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/utils"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/mongodb"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

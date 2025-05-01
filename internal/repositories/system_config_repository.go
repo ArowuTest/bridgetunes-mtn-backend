@@ -3,7 +3,7 @@ package repositories // This is the interface file
 import (
 	"context"
 
-	"github.com/bridgetunes/mtn-backend/internal/models"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 )
 
 // SystemConfigRepository defines the interface for system configuration repository

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/internal/models"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 

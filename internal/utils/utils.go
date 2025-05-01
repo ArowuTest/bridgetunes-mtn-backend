@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/internal/config"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/config"
 	"github.com/dgrijalva/jwt-go"
 )
 

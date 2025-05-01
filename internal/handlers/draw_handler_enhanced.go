@@ -5,8 +5,8 @@ import (
 	// "strconv" // Removed unused import
 	"time"
 
-	"github.com/bridgetunes/mtn-backend/internal/models"
-	"github.com/bridgetunes/mtn-backend/internal/services"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
