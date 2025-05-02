@@ -165,3 +165,13 @@ type BlacklistRepository interface {
 
 
 
+
+// AdminUserRepository defines the interface for admin user data access
+type AdminUserRepository interface {
+	Create(ctx context.Context, adminUser *models.AdminUser) (*models.AdminUser, error)
+	FindByEmail(ctx context.Context, email string) (*models.AdminUser, error)
+	FindByID(ctx context.Context, id primitive.ObjectID) (*models.AdminUser, error)
+	// Add other methods as needed (e.g., Update, Delete, FindAll)
+}
+
+
