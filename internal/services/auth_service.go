@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
-	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repository"
+	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
 	"golang.org/x/crypto/bcrypt"
 	// TODO: Add JWT library import (e.g., "github.com/golang-jwt/jwt/v5")
 	"errors"
@@ -110,4 +110,5 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (stri
 	// Return a dummy token for now
 	return "dummy-jwt-token-replace-with-real-one", nil
 }
+
 
