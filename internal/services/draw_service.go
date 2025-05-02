@@ -2,7 +2,8 @@ package services
 
 import (
 	"context"
-	"math/rand" // Added import
+	"errors" // Added for placeholder errors
+	"math/rand"
 	"time"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
@@ -10,16 +11,19 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// Compile-time check to ensure LegacyDrawService implements DrawService
+var _ DrawService = (*LegacyDrawService)(nil)
+
 // LegacyDrawService handles the original draw-related business logic
-type LegacyDrawService struct { // Renamed from DrawService
+type LegacyDrawService struct {
 	 drawRepo   repositories.DrawRepository
 	 userRepo   repositories.UserRepository
 	 winnerRepo repositories.WinnerRepository
 }
 
-// NewLegacyDrawService creates a new LegacyDrawService // Renamed from NewDrawService
-func NewLegacyDrawService(drawRepo repositories.DrawRepository, userRepo repositories.UserRepository, winnerRepo repositories.WinnerRepository) *LegacyDrawService { // Renamed return type
-	return &LegacyDrawService{ // Renamed struct type
+// NewLegacyDrawService creates a new LegacyDrawService
+func NewLegacyDrawService(drawRepo repositories.DrawRepository, userRepo repositories.UserRepository, winnerRepo repositories.WinnerRepository) *LegacyDrawService {
+	return &LegacyDrawService{
 		 drawRepo:   drawRepo,
 		 userRepo:   userRepo,
 		 winnerRepo: winnerRepo,
@@ -64,12 +68,18 @@ func (s *LegacyDrawService) DeleteDraw(ctx context.Context, id primitive.ObjectI
 	 return s.drawRepo.Delete(ctx, id)
 }
 
-// ScheduleDraw schedules a new draw
-func (s *LegacyDrawService) ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int) (*models.Draw, error) {
+// ScheduleDraw schedules a new draw (implements DrawService interface method)
+func (s *LegacyDrawService) ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error) {
 	 // Check if a draw already exists for this date
 	 existingDraw, err := s.GetDrawByDate(ctx, drawDate)
 	 if err == nil && existingDraw != nil {
-		 return existingDraw, nil
+		 return existingDraw, nil // Or return an error indicating it already exists?
+	 }
+
+	 // Determine eligible digits
+	 finalEligibleDigits := eligibleDigits
+	 if useDefaultDigits {
+		 finalEligibleDigits = s.GetDefaultEligibleDigits(drawDate.Weekday())
 	 }
 
 	 // Create prizes based on draw type
@@ -82,7 +92,7 @@ func (s *LegacyDrawService) ScheduleDraw(ctx context.Context, drawDate time.Time
 			 {Category: "FOURTH", Amount: 1000},
 			 {Category: "FIFTH", Amount: 500},
 		 }
-	 } else if drawType == "WEEKLY" {
+	 } else if drawType == "WEEKLY" { // Assuming WEEKLY, adjust if needed
 		 prizes = []models.Prize{
 			 {Category: "FIRST", Amount: 100000},
 			 {Category: "SECOND", Amount: 50000},
@@ -101,7 +111,7 @@ func (s *LegacyDrawService) ScheduleDraw(ctx context.Context, drawDate time.Time
 	 draw := &models.Draw{
 		 DrawDate:       drawDate,
 		 DrawType:       drawType,
-		 EligibleDigits: eligibleDigits,
+		 EligibleDigits: finalEligibleDigits,
 		 Status:         "SCHEDULED",
 		 Prizes:         prizes,
 		 CreatedAt:      time.Now(),
@@ -116,23 +126,23 @@ func (s *LegacyDrawService) ScheduleDraw(ctx context.Context, drawDate time.Time
 	 return draw, nil
 }
 
-// ExecuteDraw executes a scheduled draw
-func (s *LegacyDrawService) ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) error {
+// ExecuteDraw executes a scheduled draw (implements DrawService interface method)
+func (s *LegacyDrawService) ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error) {
 	 // Get the draw
 	 draw, err := s.drawRepo.FindByID(ctx, drawID)
 	 if err != nil {
-		 return err
+		 return nil, err
 	 }
 
 	 // Check if draw is already completed
 	 if draw.Status == "COMPLETED" {
-		 return nil
+		 return draw, nil // Return the completed draw
 	 }
 
 	 // Get eligible users
 	 eligibleUsers, err := s.userRepo.FindByEligibleDigits(ctx, draw.EligibleDigits, true)
 	 if err != nil {
-		 return err
+		 return draw, err // Return the draw and the error
 	 }
 
 	 // Update total participants
@@ -141,31 +151,34 @@ func (s *LegacyDrawService) ExecuteDraw(ctx context.Context, drawID primitive.Ob
 	 // If no eligible users, mark draw as completed
 	 if len(eligibleUsers) == 0 {
 		 draw.Status = "COMPLETED"
-		 return s.drawRepo.Update(ctx, draw)
+		 err = s.drawRepo.Update(ctx, draw)
+		 return draw, err // Return updated draw and potential error
 	 }
 
 	 // Select winners
 	 winners, err := s.selectWinners(ctx, draw, eligibleUsers)
 	 if err != nil {
-		 return err
+		 return draw, err // Return the draw and the error
 	 }
 
 	 // Update draw status
 	 draw.Status = "COMPLETED"
 	 err = s.drawRepo.Update(ctx, draw)
 	 if err != nil {
-		 return err
+		 return draw, err // Return updated draw and potential error
 	 }
 
 	 // Create winner records
 	 for _, winner := range winners {
 		 err = s.winnerRepo.Create(ctx, winner)
 		 if err != nil {
-			 return err
+			 // Log or handle error, but maybe continue creating other winners?
+			 // For now, return the draw and the first error encountered
+			 return draw, err
 		 }
 	 }
 
-	 return nil
+	 return draw, nil // Return the completed draw
 }
 
 // selectWinners selects winners for a draw
@@ -194,8 +207,9 @@ func (s *LegacyDrawService) selectWinners(ctx context.Context, draw *models.Draw
 
 			 winners = append(winners, winner)
 
-			 // Update prize with winner ID
-			 draw.Prizes[i].WinnerID = winner.ID
+			 // Update prize with winner ID (This might need adjustment based on how Winner ID is generated)
+			 // If winner.ID is only set after Create, this update needs to happen after winner creation loop
+			 // draw.Prizes[i].WinnerID = winner.ID
 		 }
 	 }
 
@@ -204,7 +218,6 @@ func (s *LegacyDrawService) selectWinners(ctx context.Context, draw *models.Draw
 
 // shuffleUsers shuffles a slice of users
 func shuffleUsers(users []*models.User) {
-	 // Use crypto/rand for better randomness if needed, but time-based is simpler for now
 	 r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	 r.Shuffle(len(users), func(i, j int) {
 		 users[i], users[j] = users[j], users[i]
@@ -236,41 +249,39 @@ func (s *LegacyDrawService) GetDefaultEligibleDigits(dayOfWeek time.Weekday) []i
 	 }
 }
 
+// --- Placeholder implementations for methods in DrawService interface but not in original LegacyDrawService ---
 
+var errNotImplemented = errors.New("method not implemented")
 
-// DrawService defines the interface for draw-related operations (placeholder)
-// This interface might need to be defined properly based on actual usage
-type DrawService interface {
-	GetDrawByID(ctx context.Context, id primitive.ObjectID) (*models.Draw, error)
-	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)
-	GetDrawsByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Draw, error)
-	GetDrawsByStatus(ctx context.Context, status string, page, limit int) ([]*models.Draw, error)
-	CreateDraw(ctx context.Context, draw *models.Draw) error
-	UpdateDraw(ctx context.Context, draw *models.Draw) error
-	DeleteDraw(ctx context.Context, id primitive.ObjectID) error
-	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefault bool) (*models.Draw, error) // Added useDefault based on handler
-	ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error) // Changed return type based on handler
-	GetDrawConfig(ctx context.Context, date time.Time) (*models.DrawConfig, error) // Assuming DrawConfig model exists
-	GetPrizeStructure(ctx context.Context, drawType string) ([]models.PrizeStructure, error) // Assuming PrizeStructure model exists
-	UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.PrizeStructure) error
-	GetDraws(ctx context.Context, start, end time.Time) ([]*models.Draw, error)
-	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
-	GetJackpotHistory(ctx context.Context, start, end time.Time) ([]*models.JackpotHistory, error) // Assuming JackpotHistory model exists
-	GetDrawCount(ctx context.Context) (int64, error)
-	GetDefaultEligibleDigits(dayOfWeek time.Weekday) []int
+func (s *LegacyDrawService) GetDrawConfig(ctx context.Context, date time.Time) (map[string]interface{}, error) {
+	// Placeholder: Return empty map and not implemented error
+	return make(map[string]interface{}), errNotImplemented
 }
 
-// NewDrawService is a wrapper to maintain compatibility with main.go
-// It currently returns the LegacyDrawService implementation, cast to the DrawService interface.
-// NOTE: This assumes LegacyDrawService implements the DrawService interface.
-// Dependencies might need adjustment if the interfaces diverge significantly.
-func NewDrawService(drawRepo repositories.DrawRepository /*, userRepo repositories.UserRepository, winnerRepo repositories.WinnerRepository*/) DrawService {
-	// For now, we only pass drawRepo as required by main.go's current call signature.
-	// If LegacyDrawService truly needs userRepo and winnerRepo, main.go must be updated to provide them.
-	// return NewLegacyDrawService(drawRepo, userRepo, winnerRepo)
-	
-	// Temporary: Create LegacyDrawService with nil for missing dependencies until main.go is updated
-	// This will likely cause runtime errors if userRepo or winnerRepo are used.
-	 return NewLegacyDrawService(drawRepo, nil, nil)
+func (s *LegacyDrawService) GetPrizeStructure(ctx context.Context, drawType string) ([]models.PrizeStructure, error) {
+	// Placeholder: Return nil slice and not implemented error
+	return nil, errNotImplemented
+}
+
+func (s *LegacyDrawService) UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.PrizeStructure) error {
+	// Placeholder: Return not implemented error
+	return errNotImplemented
+}
+
+func (s *LegacyDrawService) GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
+	// Placeholder: Return nil slice and not implemented error
+	return nil, errNotImplemented
+}
+
+func (s *LegacyDrawService) GetDraws(ctx context.Context, startDate, endDate time.Time) ([]*models.Draw, error) {
+	// Placeholder: Use existing GetDrawsByDateRange with default pagination?
+	// Or return not implemented error for now.
+	return s.GetDrawsByDateRange(ctx, startDate, endDate, 1, 100) // Example with pagination
+	// return nil, errNotImplemented
+}
+
+func (s *LegacyDrawService) GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	// Placeholder: Return nil slice and not implemented error
+	return nil, errNotImplemented
 }
 
