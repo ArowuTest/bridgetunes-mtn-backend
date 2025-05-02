@@ -81,6 +81,7 @@ type UserRepository interface {
 type TopupRepository interface {
 	FindByID(ctx context.Context, id primitive.ObjectID) (*models.Topup, error)
 	FindByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Topup, error)
+	FindByMSISDNAndRef(ctx context.Context, msisdn string, transactionRef string) ([]*models.Topup, error) // Added this method
 	FindByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Topup, error)
 	Create(ctx context.Context, topup *models.Topup) error
 	Update(ctx context.Context, topup *models.Topup) error
