@@ -3,11 +3,12 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo" // Now used for error checking
 	"golang.org/x/crypto/bcrypt"
 	// TODO: Add JWT library import (e.g., "github.com/golang-jwt/jwt/v5")
 	// import "github.com/golang-jwt/jwt/v5"
@@ -37,24 +38,24 @@ func NewAuthService(adminUserRepo repositories.AdminUserRepository /*, jwtSecret
 func (s *authService) Register(ctx context.Context, req *models.RegisterRequest) (*models.AdminUser, error) {
 	// Check if admin user already exists
 	_, err := s.adminUserRepo.FindByEmail(ctx, req.Email)
-	// If err is nil, it means the user was found
-	if err == nil {
-		return nil, errors.New("admin user with this email already exists")
-	}
-	// If the error is something other than "not found", return it
-	// Assuming the repository implementation returns mongo.ErrNoDocuments when not found
-	// (This should be confirmed in the actual repository implementation)
-	// if err != nil && err != mongo.ErrNoDocuments {
-	// 	 return nil, fmt.Errorf("error checking for existing admin user: %w", err)
-	// }
-	// Simplified check for now: if any error other than expected 'not found', fail.
-	// A more robust implementation would explicitly check for mongo.ErrNoDocuments.
-	// For now, we proceed if err is not nil (implying user not found or another error we ignore for now)
+
+	// Handle potential errors from FindByEmail
+	// Use a switch statement for clarity
+	 switch {
+	 case err == nil:
+	 	// User found, return error
+	 	return nil, errors.New("admin user with this email already exists")
+	 case err != mongo.ErrNoDocuments:
+	 	// An unexpected error occurred during the database query
+	 	return nil, fmt.Errorf("error checking for existing admin user: %w", err)
+	 // case err == mongo.ErrNoDocuments:
+	 	// User not found, proceed with registration (do nothing here)
+	 }
 
 	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	 hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	 if err != nil {
-	 	return nil, errors.New("failed to hash password")
+	 	return nil, fmt.Errorf("failed to hash password: %w", err)
 	 }
 
 	adminUser := &models.AdminUser{
@@ -70,7 +71,7 @@ func (s *authService) Register(ctx context.Context, req *models.RegisterRequest)
 	// Save admin user using AdminUserRepository
 	newAdminUser, err := s.adminUserRepo.Create(ctx, adminUser)
 	 if err != nil {
-	 	return nil, errors.New("failed to create admin user")
+	 	return nil, fmt.Errorf("failed to create admin user: %w", err)
 	 }
 
 	// Don't return password hash
@@ -82,21 +83,23 @@ func (s *authService) Register(ctx context.Context, req *models.RegisterRequest)
 func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (string, error) {
 	// Find admin user by email using AdminUserRepository
 	adminUser, err := s.adminUserRepo.FindByEmail(ctx, req.Email)
-	 if err != nil {
-	 	// Handle user not found (assuming mongo.ErrNoDocuments) or other errors
-	 	// if err == mongo.ErrNoDocuments {
-	 	// 	 return "", errors.New("invalid email or password")
-	 	// } else {
-	 	// 	 return "", fmt.Errorf("error finding admin user: %w", err)
-	 	// }
-	 	// Simplified error handling for now
+	
+	// Handle potential errors from FindByEmail
+	 switch {
+	 case err == mongo.ErrNoDocuments:
+	 	// User not found
 	 	return "", errors.New("invalid email or password")
+	 case err != nil:
+	 	// An unexpected error occurred during the database query
+	 	return "", fmt.Errorf("error finding admin user: %w", err)
+	 // case err == nil:
+	 	// User found, proceed with password check (do nothing here)
 	 }
 
 	// Compare submitted password with the stored hash
 	 err = bcrypt.CompareHashAndPassword([]byte(adminUser.Password), []byte(req.Password))
 	 if err != nil {
-	 	// Passwords don't match
+	 	// Passwords don't match (or bcrypt error)
 	 	return "", errors.New("invalid email or password")
 	 }
 
@@ -118,4 +121,5 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (stri
 	// Return a dummy token for now
 	return "dummy-jwt-token-replace-with-real-one", nil
 }
+
 
