@@ -253,9 +253,11 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 	*/
 
 	// Temporary fallback: Return a placeholder message until the logic is clarified
+	// Use the parsed userID (ObjectID) in the response to fix the unused variable error
 	 c.JSON(http.StatusOK, gin.H{
 	 	"message": "GetMe endpoint needs clarification: Should return AdminUser or User?",
-	 	"userID_from_token": userIDStr,
+	 	"userID_from_token_str": userIDStr,
+	 	"userID_from_token_obj": userID, // Use the userID variable here
 	 })
 
 	// Original code attempting to fetch a regular User - might be incorrect if JWT is for admins
@@ -266,5 +268,6 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 	// }
 	// c.JSON(http.StatusOK, user)
 }
+
 
 
