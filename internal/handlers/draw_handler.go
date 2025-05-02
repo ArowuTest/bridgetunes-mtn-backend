@@ -227,3 +227,122 @@ func (h *DrawHandler) GetJackpotHistory(c *gin.Context) {
 	 c.JSON(http.StatusOK, history) 
 }
 
+
+
+// CreateDraw handles POST /draws
+// Placeholder implementation
+func (h *DrawHandler) CreateDraw(c *gin.Context) {
+	// TODO: Implement logic to parse request body, call drawService.CreateDraw, and handle response/errors
+	var draw models.Draw
+	 if err := c.ShouldBindJSON(&draw); err != nil {
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		 return
+	 }
+	 // Assuming drawService.CreateDraw exists and takes context and *models.Draw
+	 // newDraw, err := h.drawService.CreateDraw(c.Request.Context(), &draw)
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create draw: " + err.Error()})
+	 // 	 return
+	 // }
+	 // c.JSON(http.StatusCreated, newDraw)
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "CreateDraw not implemented"})
+}
+
+// UpdateDraw handles PUT /draws/:id
+// Placeholder implementation
+func (h *DrawHandler) UpdateDraw(c *gin.Context) {
+	// TODO: Implement logic to parse ID, parse request body, call drawService.UpdateDraw, and handle response/errors
+	 _, err := primitive.ObjectIDFromHex(c.Param("id"))
+	 if err != nil {
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		 return
+	 }
+	 var draw models.Draw
+	 if err := c.ShouldBindJSON(&draw); err != nil {
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		 return
+	 }
+	 // draw.ID = id // Set the ID from the path parameter
+	 // Assuming drawService.UpdateDraw exists and takes context and *models.Draw
+	 // updatedDraw, err := h.drawService.UpdateDraw(c.Request.Context(), &draw)
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update draw: " + err.Error()})
+	 // 	 return
+	 // }
+	 // c.JSON(http.StatusOK, updatedDraw)
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "UpdateDraw not implemented"})
+}
+
+// DeleteDraw handles DELETE /draws/:id
+// Placeholder implementation
+func (h *DrawHandler) DeleteDraw(c *gin.Context) {
+	// TODO: Implement logic to parse ID, call drawService.DeleteDraw, and handle response/errors
+	 _, err := primitive.ObjectIDFromHex(c.Param("id"))
+	 if err != nil {
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		 return
+	 }
+	 // Assuming drawService.DeleteDraw exists and takes context and primitive.ObjectID
+	 // err = h.drawService.DeleteDraw(c.Request.Context(), id)
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete draw: " + err.Error()})
+	 // 	 return
+	 // }
+	 // c.JSON(http.StatusOK, gin.H{"message": "Draw deleted successfully"})
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "DeleteDraw not implemented"})
+}
+
+// GetWinners handles GET /draws/winners/:id
+// Placeholder implementation - Note: routes.go has /draws/winners/:id but GetDrawWinners uses /draws/:id/winners
+// Assuming the route is /draws/:id/winners based on GetDrawWinners implementation
+func (h *DrawHandler) GetWinners(c *gin.Context) {
+	// TODO: Implement logic to parse ID, call drawService.GetWinnersByDrawID, and handle response/errors
+	 _, err := primitive.ObjectIDFromHex(c.Param("id"))
+	 if err != nil {
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		 return
+	 }
+	 // winners, err := h.drawService.GetWinnersByDrawID(c.Request.Context(), id)
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get winners: " + err.Error()})
+	 // 	 return
+	 // }
+	 // c.JSON(http.StatusOK, winners)
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "GetWinners not implemented"})
+}
+
+// GetDrawByDate handles GET /draws/date/:date
+// Placeholder implementation
+func (h *DrawHandler) GetDrawByDate(c *gin.Context) {
+	// TODO: Implement logic to parse date, call drawService.GetDrawByDate, and handle response/errors
+	 dateStr := c.Param("date")
+	 _, err := time.Parse("2006-01-02", dateStr)
+	 if err != nil {
+		 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format (YYYY-MM-DD)"})
+		 return
+	 }
+	 // draw, err := h.drawService.GetDrawByDate(c.Request.Context(), date)
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusNotFound, gin.H{"error": "Draw not found for date: " + err.Error()})
+	 // 	 return
+	 // }
+	 // c.JSON(http.StatusOK, draw)
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "GetDrawByDate not implemented"})
+}
+
+// GetDefaultDigitsForDay handles GET /draws/default-digits/:day
+// Placeholder implementation
+func (h *DrawHandler) GetDefaultDigitsForDay(c *gin.Context) {
+	// TODO: Implement logic to parse day, call utils.GetDefaultEligibleDigits, and return digits
+	 dayStr := c.Param("day") // e.g., "Monday", "Tuesday"
+	 // Convert dayStr to time.Weekday if needed by the service/util function
+	 // weekday, err := utils.ParseWeekday(dayStr) // Assuming a helper function exists
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid day name"})
+	 // 	 return
+	 // }
+	 // digits := utils.GetDefaultEligibleDigits(weekday)
+	 // c.JSON(http.StatusOK, gin.H{"day": dayStr, "digits": digits})
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "GetDefaultDigitsForDay not implemented", "requested_day": dayStr})
+}
+
