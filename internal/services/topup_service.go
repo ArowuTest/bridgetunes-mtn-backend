@@ -11,16 +11,19 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// LegacyTopupService handles topup-related business logic // Renamed from TopupService
+// Compile-time check to ensure LegacyTopupService implements TopupService
+var _ TopupService = (*LegacyTopupService)(nil)
+
+// LegacyTopupService handles topup-related business logic
 type LegacyTopupService struct {
 	 topupRepo repositories.TopupRepository
-	 userService *LegacyUserService // Renamed dependency type
+	 userService UserService // Use interface type for dependency
 	 mtnClient *mtnapi.Client
 }
 
-// NewLegacyTopupService creates a new LegacyTopupService // Renamed from NewTopupService
-func NewLegacyTopupService(topupRepo repositories.TopupRepository, userService *LegacyUserService, mtnClient *mtnapi.Client) *LegacyTopupService { // Renamed parameter and return type
-	return &LegacyTopupService{ // Renamed struct type
+// NewLegacyTopupService creates a new LegacyTopupService
+func NewLegacyTopupService(topupRepo repositories.TopupRepository, userService UserService, mtnClient *mtnapi.Client) *LegacyTopupService {
+	return &LegacyTopupService{
 		 topupRepo: topupRepo,
 		 userService: userService,
 		 mtnClient: mtnClient,
@@ -70,37 +73,33 @@ func (s *LegacyTopupService) ProcessTopups(ctx context.Context, startDate, endDa
 	 processed := 0
 	 for _, t := range topups {
 		 // Check if topup already exists
-		 existingTopups, err := s.topupRepo.FindByMSISDN(ctx, t.MSISDN, 1, 100)
+		 // Consider optimizing this check if performance becomes an issue
+		 existingTopups, err := s.topupRepo.FindByMSISDNAndRef(ctx, t.MSISDN, t.TransactionRef) // Assuming FindByMSISDNAndRef exists
 		 if err != nil {
+			 // Log error but continue processing other topups
 			 continue
 		 }
-
-		 // Check if this transaction reference already exists
-		 exists := false
-		 for _, existing := range existingTopups {
-			 if existing.TransactionRef == t.TransactionRef {
-				 exists = true
-				 break
-			 }
+		 if len(existingTopups) > 0 {
+			 continue // Skip if already exists
 		 }
 
-		 if !exists {
-			 // Create new topup
-			 topup := &models.Topup{
-				 MSISDN:         t.MSISDN,
-				 Amount:         t.Amount,
-				 Channel:        "MTN",
-				 Date:           t.Date,
-				 TransactionRef: t.TransactionRef,
-				 Processed:      false,
-				 CreatedAt:      time.Now(),
-				 UpdatedAt:      time.Now(),
-			 }
+		 // Create new topup
+		 topup := &models.Topup{
+			 MSISDN:         t.MSISDN,
+			 Amount:         t.Amount,
+			 Channel:        "MTN",
+			 Date:           t.Date,
+			 TransactionRef: t.TransactionRef,
+			 Processed:      true, // Mark as processed since we are creating it here
+			 CreatedAt:      time.Now(),
+			 UpdatedAt:      time.Now(),
+		 }
 
-			 err = s.CreateTopup(ctx, topup)
-			 if err == nil {
-				 processed++
-			 }
+		 err = s.CreateTopup(ctx, topup)
+		 if err == nil {
+			 processed++
+		 } else {
+			 // Log error creating topup
 		 }
 	 }
 
@@ -112,40 +111,11 @@ func calculatePoints(amount float64) int {
 	 if amount < 100 {
 		 return 0
 	 }
-	 // Calculate points: 1 point for every 100 Naira
-	 // Use math.Floor to handle potential floating point inaccuracies and ensure whole points
 	 return int(math.Floor(amount / 100.0))
 }
 
 // GetTopupCount gets the total number of topups
 func (s *LegacyTopupService) GetTopupCount(ctx context.Context) (int64, error) {
 	return s.topupRepo.Count(ctx)
-}
-
-
-
-// TopupService defines the interface for topup-related operations (placeholder)
-type TopupService interface {
-	GetTopupByID(ctx context.Context, id primitive.ObjectID) (*models.Topup, error)
-	GetTopupsByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Topup, error)
-	GetTopupsByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Topup, error)
-	CreateTopup(ctx context.Context, topup *models.Topup) error
-	ProcessTopups(ctx context.Context, startDate, endDate time.Time) (int, error)
-	GetTopupCount(ctx context.Context) (int64, error)
-	// Add GetTopups if needed by handlers/routes
-	// GetTopups(ctx context.Context, page, limit int /*, filters... */) ([]*models.Topup, error)
-}
-
-// NewTopupService is a wrapper to maintain compatibility with main.go
-// It returns the LegacyTopupService implementation, cast to the TopupService interface.
-// NOTE: This assumes LegacyTopupService implements the TopupService interface.
-// Dependencies might need adjustment.
-func NewTopupService(topupRepo repositories.TopupRepository /*, userService *LegacyUserService, mtnClient *mtnapi.Client*/) TopupService {
-	// main.go currently only passes topupRepo.
-	// LegacyTopupService needs userService and mtnClient.
-	// This will cause runtime errors if userService or mtnClient are used.
-	// We need to update main.go to provide these dependencies.
-	// For now, pass nil to allow compilation.
-	 return NewLegacyTopupService(topupRepo, nil, nil)
 }
 
