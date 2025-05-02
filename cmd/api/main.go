@@ -122,13 +122,19 @@ func main() {
 	// Setup Router using the centralized function from routes package
 	 router := routes.SetupRouter(cfg, handlerDeps)
 
+	// Determine port: Use PORT environment variable if set, otherwise use config
+	 port := os.Getenv("PORT")
+	 if port == "" {
+	 	port = cfg.Server.Port
+	 }
+
 	// Start the server
 	 srv := &http.Server{
-		Addr:    ":" + cfg.Server.Port,
+		Addr:    ":" + port, // Use the determined port
 		Handler: router,
 	}
 
-	log.Printf("Server starting on port %s", cfg.Server.Port)
+	log.Printf("Server starting on port %s", port) // Log the actual port being used
 
 	// Run server in a goroutine so that it doesn't block
 	go func() {
