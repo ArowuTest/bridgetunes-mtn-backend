@@ -120,27 +120,4 @@ func (s *LegacyUserService) GetUserCount(ctx context.Context) (int64, error) {
 }
 
 
-// UserService defines the interface for user-related operations (placeholder)
-type UserService interface {
-	GetUserByID(ctx context.Context, id primitive.ObjectID) (*models.User, error)
-	GetUserByMSISDN(ctx context.Context, msisdn string) (*models.User, error)
-	GetAllUsers(ctx context.Context, page, limit int) ([]*models.User, error)
-	GetUsersByOptInStatus(ctx context.Context, optInStatus bool, page, limit int) ([]*models.User, error)
-	GetUsersByEligibleDigits(ctx context.Context, digits []int, optInStatus bool) ([]*models.User, error)
-	CreateUser(ctx context.Context, user *models.User) error
-	UpdateUser(ctx context.Context, user *models.User) error
-	DeleteUser(ctx context.Context, id primitive.ObjectID) error
-	OptIn(ctx context.Context, msisdn string, channel string) error
-	OptOut(ctx context.Context, msisdn string) error
-	AddPoints(ctx context.Context, msisdn string, points int) error
-	GetUserCount(ctx context.Context) (int64, error)
-}
-
-// NewUserService is a wrapper to maintain compatibility with main.go
-// It returns the LegacyUserService implementation, cast to the UserService interface.
-// NOTE: This assumes LegacyUserService implements the UserService interface.
-func NewUserService(userRepo repositories.UserRepository) UserService {
-	// LegacyUserService only requires userRepo, which main.go provides.
-	 return NewLegacyUserService(userRepo)
-}
 
