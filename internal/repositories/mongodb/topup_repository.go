@@ -104,3 +104,26 @@ func (r *TopupRepository) Delete(ctx context.Context, id primitive.ObjectID) err
 func (r *TopupRepository) Count(ctx context.Context) (int64, error) {
 	return r.collection.CountDocuments(ctx, bson.M{})
 }
+
+
+// FindByMSISDNAndRef finds topups by MSISDN and Transaction Reference
+func (r *TopupRepository) FindByMSISDNAndRef(ctx context.Context, msisdn string, transactionRef string) ([]*models.Topup, error) {
+	filter := bson.M{
+		"msisdn":         msisdn,
+		"transactionRef": transactionRef,
+	}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	 if err != nil {
+		 return nil, err
+	 }
+	defer cursor.Close(ctx)
+
+	var topups []*models.Topup
+	 if err := cursor.All(ctx, &topups); err != nil {
+		 return nil, err
+	 }
+	 return topups, nil
+}
+
+
