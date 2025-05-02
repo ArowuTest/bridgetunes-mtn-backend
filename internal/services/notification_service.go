@@ -10,28 +10,31 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// LegacyNotificationService handles notification-related business logic // Renamed from NotificationService
+// Compile-time check to ensure LegacyNotificationService implements NotificationService
+var _ NotificationService = (*LegacyNotificationService)(nil)
+
+// LegacyNotificationService handles notification-related business logic
 type LegacyNotificationService struct {
 	notificationRepo repositories.NotificationRepository
 	campaignRepo     repositories.CampaignRepository
 	 templateRepo     repositories.TemplateRepository
-	userRepo         repositories.UserRepository
+	userRepo         repositories.UserRepository // Use interface type for dependency
 	mtnGateway       smsgateway.Gateway
 	 kodobeGateway    smsgateway.Gateway
 	defaultGateway   string
 }
 
-// NewLegacyNotificationService creates a new LegacyNotificationService // Renamed from NewNotificationService
+// NewLegacyNotificationService creates a new LegacyNotificationService
 func NewLegacyNotificationService(
 	notificationRepo repositories.NotificationRepository,
 	 templateRepo repositories.TemplateRepository,
 	 campaignRepo repositories.CampaignRepository,
-	 userRepo repositories.UserRepository,
+	 userRepo repositories.UserRepository, // Use interface type for dependency
 	 mtnGateway smsgateway.Gateway,
 	 kodobeGateway smsgateway.Gateway,
 	 defaultGateway string,
-) *LegacyNotificationService { // Renamed return type
-	return &LegacyNotificationService{ // Renamed struct type
+) *LegacyNotificationService {
+	return &LegacyNotificationService{
 		notificationRepo: notificationRepo,
 		 templateRepo:     templateRepo,
 		 campaignRepo:     campaignRepo,
@@ -69,8 +72,8 @@ func (s *LegacyNotificationService) SendSMS(ctx context.Context, msisdn, content
 		MSISDN:     msisdn,
 		Content:    content,
 		Type:       notificationType,
-		Status:     "SENT",
-		SentDate:   time.Now(),
+		Status:     "PENDING", // Start as PENDING
+		SentDate:   time.Time{}, // Set SentDate only on successful send
 		CampaignID: campaignID,
 		Gateway:    s.defaultGateway,
 		CreatedAt:  time.Now(),
@@ -90,26 +93,33 @@ func (s *LegacyNotificationService) SendSMS(ctx context.Context, msisdn, content
 	// Send SMS
 	 messageID, err := gateway.SendSMS(msisdn, content)
 	 if err != nil {
-	 	// If MTN gateway fails, try Kodobe as fallback
-	 	 if s.defaultGateway == "MTN" {
-	 	 	messageID, err = s.kodobeGateway.SendSMS(msisdn, content)
-	 	 	 if err != nil {
-	 	 	 	notification.Status = "FAILED"
-	 	 	 	 s.notificationRepo.Create(ctx, notification)
-	 	 	 	 return notification, err
-	 	 	 }
-	 	 	 notification.Gateway = "KODOBE"
-	 	 } else {
-	 	 	 notification.Status = "FAILED"
-	 	 	 s.notificationRepo.Create(ctx, notification)
-	 	 	 return notification, err
+	 	// If default gateway fails, try the other one as fallback
+	 	 if s.defaultGateway == "MTN" && s.kodobeGateway != nil {
+	 	 	gateway = s.kodobeGateway
+	 	 	notification.Gateway = "KODOBE"
+	 	 	messageID, err = gateway.SendSMS(msisdn, content)
+	 	 } else if s.defaultGateway != "MTN" && s.mtnGateway != nil {
+	 	 	gateway = s.mtnGateway
+	 	 	notification.Gateway = "MTN"
+	 	 	messageID, err = gateway.SendSMS(msisdn, content)
+	 	 }
+
+	 	 // If fallback also fails
+	 	 if err != nil {
+	 	 	notification.Status = "FAILED"
+	 	 	 s.notificationRepo.Create(ctx, notification) // Save failed attempt
+	 	 	 return notification, err // Return the failed notification and the error
 	 	 }
 	 }
 
+	// SMS sent successfully (either primary or fallback)
 	notification.MessageID = messageID
-	 err = s.notificationRepo.Create(ctx, notification)
+	notification.Status = "SENT"
+	notification.SentDate = time.Now()
+	 err = s.notificationRepo.Create(ctx, notification) // Save successful attempt
 	 if err != nil {
-	 	 return nil, err
+	 	 // Log error saving notification, but SMS was sent
+	 	 return notification, err // Return notification and DB error
 	 }
 
 	return notification, nil
@@ -137,7 +147,7 @@ func (s *LegacyNotificationService) ExecuteCampaign(ctx context.Context, campaig
 
 	// Check if campaign is already running or completed
 	 if campaign.Status == "RUNNING" || campaign.Status == "COMPLETED" {
-	 	 return nil
+	 	 return nil // Or return an error?
 	 }
 
 	// Get the template
@@ -148,21 +158,22 @@ func (s *LegacyNotificationService) ExecuteCampaign(ctx context.Context, campaig
 
 	// Get target users based on segment
 	 var targetUsers []*models.User
-	 // Placeholder: Fetch all opted-in users for now
-	 targetUsers, err = s.userRepo.FindByOptInStatus(ctx, true, 1, 10000) // Increased limit for testing
+	 // Placeholder: Fetch all opted-in users for now. Needs proper segmentation logic.
+	 targetUsers, err = s.userRepo.FindByOptInStatus(ctx, true, 1, 10000) // Consider pagination for large user bases
 
 	 if err != nil {
 	 	 return err
 	 }
 
-	// Update campaign status
+	// Update campaign status to RUNNING
 	 campaign.Status = "RUNNING"
 	 err = s.campaignRepo.Update(ctx, campaign)
 	 if err != nil {
 	 	 return err
 	 }
 
-	// Send notifications to target users
+	// Send notifications asynchronously?
+	// For now, sending synchronously
 	 var totalSent, delivered, failed int
 	 for _, user := range targetUsers {
 	 	 if !user.OptInStatus {
@@ -175,12 +186,13 @@ func (s *LegacyNotificationService) ExecuteCampaign(ctx context.Context, campaig
 	 	 	 delivered++
 	 	 } else {
 	 	 	 failed++
+	 		 // Log individual send errors
 	 	 }
 	 }
 
-	// Update campaign status and stats
+	// Update campaign status to COMPLETED and stats
 	 campaign.Status = "COMPLETED"
-	 // Add stats update here if fields exist in Campaign model
+	 // Add stats update here if fields exist in Campaign model (e.g., campaign.TotalSent = totalSent)
 	 return s.campaignRepo.Update(ctx, campaign)
 }
 
@@ -237,43 +249,5 @@ func (s *LegacyNotificationService) GetTemplateCount(ctx context.Context) (int64
 	 return s.templateRepo.Count(ctx)
 }
 
-
-
-// NotificationService defines the interface for notification-related operations (placeholder)
-type NotificationService interface {
-	GetNotificationByID(ctx context.Context, id primitive.ObjectID) (*models.Notification, error)
-	GetNotificationsByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Notification, error)
-	GetNotificationsByCampaignID(ctx context.Context, campaignID primitive.ObjectID, page, limit int) ([]*models.Notification, error)
-	GetNotificationsByStatus(ctx context.Context, status string, page, limit int) ([]*models.Notification, error)
-	SendSMS(ctx context.Context, msisdn, content, notificationType string, campaignID primitive.ObjectID) (*models.Notification, error)
-	CreateCampaign(ctx context.Context, campaign *models.Campaign) error
-	GetAllCampaigns(ctx context.Context, page, limit int) ([]models.Campaign, error)
-	ExecuteCampaign(ctx context.Context, campaignID primitive.ObjectID) error
-	CreateTemplate(ctx context.Context, template *models.Template) error
-	GetTemplateByID(ctx context.Context, id primitive.ObjectID) (*models.Template, error)
-	GetTemplateByName(ctx context.Context, name string) (*models.Template, error)
-	GetTemplatesByType(ctx context.Context, templateType string, page, limit int) ([]*models.Template, error)
-	GetAllTemplates(ctx context.Context, page, limit int) ([]*models.Template, error)
-	UpdateTemplate(ctx context.Context, template *models.Template) error
-	DeleteTemplate(ctx context.Context, id primitive.ObjectID) error
-	GetNotificationCount(ctx context.Context) (int64, error)
-	GetCampaignCount(ctx context.Context) (int64, error)
-	GetTemplateCount(ctx context.Context) (int64, error)
-	// Add GetNotifications if needed by handlers/routes
-	// GetNotifications(ctx context.Context, page, limit int /*, filters... */) ([]*models.Notification, error)
-}
-
-// NewNotificationService is a wrapper to maintain compatibility with main.go
-// It returns the LegacyNotificationService implementation, cast to the NotificationService interface.
-// NOTE: This assumes LegacyNotificationService implements the NotificationService interface.
-// Dependencies might need adjustment.
-func NewNotificationService(notificationRepo repositories.NotificationRepository /*, templateRepo, campaignRepo, userRepo, gateways... */) NotificationService {
-	// main.go currently only passes notificationRepo.
-	// LegacyNotificationService needs templateRepo, campaignRepo, userRepo, and gateways.
-	// This will cause runtime errors if those dependencies are used.
-	// We need to update main.go to provide these dependencies.
-	// For now, pass nil to allow compilation.
-	 return NewLegacyNotificationService(notificationRepo, nil, nil, nil, nil, nil, "")
-}
 
 
