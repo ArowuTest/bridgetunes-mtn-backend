@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/spf13/viper"
 )
 
@@ -69,6 +71,8 @@ func Load() (*Config, error) {
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("./config")
 	viper.AutomaticEnv()
+	// Use underscore replacement for environment variables (e.g., SERVER_ALLOWED_HOSTS)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// Set defaults
 	setDefaults()
@@ -87,13 +91,24 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Viper doesn't automatically parse comma-separated strings from env vars into slices.
+	// We need to handle it manually if the env var is set.
+	 if hosts := viper.GetString("Server.AllowedHosts"); hosts != "" {
+		// Check if it's a comma-separated string (likely from env var)
+		// If it's already a slice (from yaml), viper.GetString might return something unexpected or empty.
+		// A more robust check might be needed, but this handles the common env var case.
+		 if strings.Contains(hosts, ",") {
+			config.Server.AllowedHosts = strings.Split(hosts, ",")
+		}
+	}
+
 	return &config, nil
 }
 
 // setDefaults sets default values for configuration
 func setDefaults() {
 	viper.SetDefault("Server.Port", "4000")
-	// Ensure default host includes protocol prefix for CORS
+	// Default only for local development, expect SERVER_ALLOWED_HOSTS env var in deployment
 	viper.SetDefault("Server.AllowedHosts", []string{"http://localhost:3000"}) 
 	viper.SetDefault("MongoDB.URI", "mongodb+srv://fsanus20111:wXVTvRfaCtcd5W7t@cluster0.llhkakp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 	viper.SetDefault("MongoDB.Database", "bridgetunes-mtn")
