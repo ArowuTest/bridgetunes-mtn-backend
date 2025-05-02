@@ -17,22 +17,7 @@ type DrawConfig struct {
 	// Add other config fields as needed
 }
 
-// JackpotHistory represents a record in the jackpot history.
-// Placeholder definition.
-type JackpotHistory struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	DrawDate  time.Time          `bson:"draw_date" json:"draw_date"`
-	DrawType  string             `bson:"draw_type" json:"draw_type"`
-	Amount    float64            `bson:"amount" json:"amount"`
-	WinnerID  primitive.ObjectID `bson:"winner_id,omitempty" json:"winner_id,omitempty"` // Optional: Link to winner if won
-	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
-}
+// Note: PrizeStructure is defined in draw.go
+// Note: JackpotHistoryEntry is defined in draw.go
 
-// PrizeStructure defines the structure of prizes for a specific draw type.
-// Assuming this was already defined somewhere, but adding here for completeness if not.
-type PrizeStructure struct {
-	Category string  `bson:"category" json:"category"` // e.g., "FIRST", "SECOND"
-	Amount   float64 `bson:"amount" json:"amount"`
-	// Add other fields like quantity if needed
-}
 
