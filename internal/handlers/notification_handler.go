@@ -316,3 +316,24 @@ func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 	 c.JSON(http.StatusOK, gin.H{"message": "Template deleted successfully"})
 }
 
+
+
+// GetNotifications handles GET /notifications
+// Placeholder implementation - Assumes pagination and potentially filtering
+func (h *NotificationHandler) GetNotifications(c *gin.Context) {
+	// TODO: Implement logic to parse query params (pagination, filters like status, msisdn, campaign_id), call notificationService.GetNotifications, and handle response/errors
+	 page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	 limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	 // Add other filters as needed
+
+	 // Assuming notificationService.GetNotifications exists and takes context, page, limit, and potentially filters
+	 // notifications, err := h.notificationService.GetNotifications(c.Request.Context(), page, limit /*, filters... */)
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get notifications: " + err.Error()})
+	 // 	 return
+	 // }
+	 // c.JSON(http.StatusOK, notifications)
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "GetNotifications not implemented", "page": page, "limit": limit})
+}
+
+
