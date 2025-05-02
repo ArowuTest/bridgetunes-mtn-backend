@@ -9,12 +9,15 @@ import (
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/dgrijalva/jwt-go" // Added missing import for JWT
 )
 
 // UserHandler handles user-related HTTP requests
 type UserHandler struct {
 	// Use the interface type directly, not a pointer
 	userService services.UserService
+	// Consider adding AdminUserService if GetMe should return AdminUser
+	// adminUserService services.AdminUserService
 }
 
 // NewUserHandler creates a new UserHandler
@@ -199,4 +202,69 @@ func (h *UserHandler) GetUserCount(c *gin.Context) {
 
 	 c.JSON(http.StatusOK, gin.H{"count": count})
 }
+
+
+
+// GetMe handles GET /users/me
+// It retrieves the user ID from the JWT claims and fetches the user details.
+// IMPORTANT: This currently assumes the JWT belongs to an AdminUser and fetches details using AdminUserRepository.
+// If the JWT is for regular Users, this needs significant changes.
+func (h *UserHandler) GetMe(c *gin.Context) {
+	// Extract user ID from JWT claims (assuming it's stored as "sub")
+	userIDClaim, exists := c.Get("claims") // Assuming claims are stored under "claims" by JWT middleware
+	 if !exists {
+		 c.JSON(http.StatusUnauthorized, gin.H{"error": "User claims not found in context"})
+		 return
+	}
+
+	claims, ok := userIDClaim.(jwt.MapClaims)
+	 if !ok {
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid claims format"})
+		 return
+	}
+
+	userIDStr, ok := claims["sub"].(string) // Assuming user ID is stored in the 'sub' claim
+	 if !ok {
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID (sub) not found in token claims"})
+		 return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(userIDStr)
+	 if err != nil {
+		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format in token"})
+		 return
+	}
+
+	// TODO: Clarify if /users/me should return AdminUser or User.
+	// If AdminUser, we need AdminUserService injected here.
+	// If User, the JWT needs to contain the User's ObjectID.
+	// For now, assuming it's an AdminUser and calling a non-existent AdminUserService method.
+	// This will need correction based on actual requirements.
+
+	// Placeholder: Attempting to fetch AdminUser details (requires AdminUserService)
+	/*
+	adminUser, err := h.adminUserService.GetAdminUserByID(c, userID) // Assuming adminUserService exists and has this method
+	 if err != nil {
+		 c.JSON(http.StatusNotFound, gin.H{"error": "Admin user not found: " + err.Error() })
+		 return
+	}
+	adminUser.Password = "" // Ensure password hash is not returned
+	 c.JSON(http.StatusOK, adminUser)
+	*/
+
+	// Temporary fallback: Return a placeholder message until the logic is clarified
+	 c.JSON(http.StatusOK, gin.H{
+	 	"message": "GetMe endpoint needs clarification: Should return AdminUser or User?",
+	 	"userID_from_token": userIDStr,
+	 })
+
+	// Original code attempting to fetch a regular User - might be incorrect if JWT is for admins
+	// user, err := h.userService.GetUserByID(c, userID)
+	// if err != nil {
+	// 	 c.JSON(http.StatusNotFound, gin.H{"error": "User not found: " + err.Error() })
+	// 	 return
+	// }
+	// c.JSON(http.StatusOK, user)
+}
+
 
