@@ -16,17 +16,27 @@ var _ DrawService = (*LegacyDrawService)(nil)
 
 // LegacyDrawService handles the original draw-related business logic
 type LegacyDrawService struct {
-	 drawRepo   repositories.DrawRepository
-	 userRepo   repositories.UserRepository
-	 winnerRepo repositories.WinnerRepository
+	 drawRepo         repositories.DrawRepository
+	 userRepo         repositories.UserRepository
+	 winnerRepo       repositories.WinnerRepository
+	 blacklistRepo    repositories.BlacklistRepository    // Added dependency
+	 systemConfigRepo repositories.SystemConfigRepository // Added dependency
 }
 
 // NewLegacyDrawService creates a new LegacyDrawService
-func NewLegacyDrawService(drawRepo repositories.DrawRepository, userRepo repositories.UserRepository, winnerRepo repositories.WinnerRepository) *LegacyDrawService {
+func NewLegacyDrawService(
+	 drawRepo repositories.DrawRepository,
+	 userRepo repositories.UserRepository,
+	 winnerRepo repositories.WinnerRepository,
+	 blacklistRepo repositories.BlacklistRepository,    // Added parameter
+	 systemConfigRepo repositories.SystemConfigRepository, // Added parameter
+) *LegacyDrawService {
 	return &LegacyDrawService{
-		 drawRepo:   drawRepo,
-		 userRepo:   userRepo,
-		 winnerRepo: winnerRepo,
+		 drawRepo:         drawRepo,
+		 userRepo:         userRepo,
+		 winnerRepo:       winnerRepo,
+		 blacklistRepo:    blacklistRepo,    // Added assignment
+		 systemConfigRepo: systemConfigRepo, // Added assignment
 	}
 }
 
@@ -82,7 +92,7 @@ func (s *LegacyDrawService) ScheduleDraw(ctx context.Context, drawDate time.Time
 		 finalEligibleDigits = s.GetDefaultEligibleDigits(drawDate.Weekday())
 	 }
 
-	 // Create prizes based on draw type
+	 // Create prizes based on draw type (Consider fetching from systemConfigRepo later)
 	 var prizes []models.Prize
 	 if drawType == "DAILY" {
 		 prizes = []models.Prize{
@@ -145,18 +155,29 @@ func (s *LegacyDrawService) ExecuteDraw(ctx context.Context, drawID primitive.Ob
 		 return draw, err // Return the draw and the error
 	 }
 
-	 // Update total participants
-	 draw.TotalParticipants = len(eligibleUsers)
+	 // Filter out blacklisted users (Placeholder - implement actual check)
+	 var filteredEligibleUsers []*models.User
+	 for _, user := range eligibleUsers {
+		 // Placeholder: Check if user.MSISDN is in blacklistRepo
+		 // isBlacklisted, err := s.blacklistRepo.FindByMSISDN(ctx, user.MSISDN)
+		 // if err != nil && err != mongo.ErrNoDocuments { /* handle error */ }
+		 // if isBlacklisted == nil { // Not blacklisted
+			 filteredEligibleUsers = append(filteredEligibleUsers, user)
+		 // }
+	 }
+
+	 // Update total participants (using filtered list)
+	 draw.TotalParticipants = len(filteredEligibleUsers)
 
 	 // If no eligible users, mark draw as completed
-	 if len(eligibleUsers) == 0 {
+	 if len(filteredEligibleUsers) == 0 {
 		 draw.Status = "COMPLETED"
 		 err = s.drawRepo.Update(ctx, draw)
 		 return draw, err // Return updated draw and potential error
 	 }
 
-	 // Select winners
-	 winners, err := s.selectWinners(ctx, draw, eligibleUsers)
+	 // Select winners from the filtered list
+	 winners, err := s.selectWinners(ctx, draw, filteredEligibleUsers)
 	 if err != nil {
 		 return draw, err // Return the draw and the error
 	 }
@@ -254,34 +275,41 @@ func (s *LegacyDrawService) GetDefaultEligibleDigits(dayOfWeek time.Weekday) []i
 var errNotImplemented = errors.New("method not implemented")
 
 func (s *LegacyDrawService) GetDrawConfig(ctx context.Context, date time.Time) (map[string]interface{}, error) {
-	// Placeholder: Return empty map and not implemented error
+	// Placeholder: Use systemConfigRepo to fetch config?
+	// config, err := s.systemConfigRepo.FindByKey(ctx, "draw_config_" + date.Format("2006-01-02"))
+	// if err != nil { return nil, err }
+	// return config.Value.(map[string]interface{}), nil // Assuming Value is map[string]interface{}
 	return make(map[string]interface{}), errNotImplemented
 }
 
 func (s *LegacyDrawService) GetPrizeStructure(ctx context.Context, drawType string) ([]models.PrizeStructure, error) {
-	// Placeholder: Return nil slice and not implemented error
+	// Placeholder: Use systemConfigRepo to fetch prize structure?
+	// config, err := s.systemConfigRepo.FindByKey(ctx, "prize_structure_" + drawType)
+	// if err != nil { return nil, err }
+	// return config.Value.([]models.PrizeStructure), nil // Assuming Value is []models.PrizeStructure
 	return nil, errNotImplemented
 }
 
 func (s *LegacyDrawService) UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.PrizeStructure) error {
-	// Placeholder: Return not implemented error
+	// Placeholder: Use systemConfigRepo to update prize structure?
+	// config := &models.SystemConfig{ Key: "prize_structure_" + drawType, Value: structure }
+	// return s.systemConfigRepo.Update(ctx, config)
 	return errNotImplemented
 }
 
 func (s *LegacyDrawService) GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
-	// Placeholder: Return nil slice and not implemented error
+	// Placeholder: Use winnerRepo
+	// return s.winnerRepo.FindByDrawID(ctx, drawID, 1, 1000) // Example with pagination
 	return nil, errNotImplemented
 }
 
 func (s *LegacyDrawService) GetDraws(ctx context.Context, startDate, endDate time.Time) ([]*models.Draw, error) {
 	// Placeholder: Use existing GetDrawsByDateRange with default pagination?
-	// Or return not implemented error for now.
 	return s.GetDrawsByDateRange(ctx, startDate, endDate, 1, 100) // Example with pagination
-	// return nil, errNotImplemented
 }
 
 func (s *LegacyDrawService) GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
-	// Placeholder: Return nil slice and not implemented error
+	// Placeholder: This likely requires more complex logic involving multiple repos
 	return nil, errNotImplemented
 }
 
