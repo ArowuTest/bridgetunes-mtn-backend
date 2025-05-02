@@ -74,16 +74,16 @@ func Load() (*Config, error) {
 	setDefaults()
 
 	// Read configuration
-	if err := viper.ReadInConfig(); err != nil {
+	 if err := viper.ReadInConfig(); err != nil {
 		// It's okay if config file is not found, we'll use environment variables
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		 if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, err
 		}
 	}
 
 	// Unmarshal configuration
 	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	 if err := viper.Unmarshal(&config); err != nil {
 		return nil, err
 	}
 
@@ -93,7 +93,8 @@ func Load() (*Config, error) {
 // setDefaults sets default values for configuration
 func setDefaults() {
 	viper.SetDefault("Server.Port", "4000")
-	viper.SetDefault("Server.AllowedHosts", []string{"localhost:3000"})
+	// Ensure default host includes protocol prefix for CORS
+	viper.SetDefault("Server.AllowedHosts", []string{"http://localhost:3000"}) 
 	viper.SetDefault("MongoDB.URI", "mongodb+srv://fsanus20111:wXVTvRfaCtcd5W7t@cluster0.llhkakp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 	viper.SetDefault("MongoDB.Database", "bridgetunes-mtn")
 	viper.SetDefault("JWT.ExpiresIn", 24*60*60) // 24 hours
@@ -102,4 +103,5 @@ func setDefaults() {
 	viper.SetDefault("SMS.DefaultGateway", "mtn")
 	viper.SetDefault("SMS.MockSMSGateway", true)
 }
+
 
