@@ -168,3 +168,24 @@ func (h *TopupHandler) GetTopupCount(c *gin.Context) {
 
 	 c.JSON(http.StatusOK, gin.H{"count": count}) 
 }
+
+
+// GetTopups handles GET /topups
+// Placeholder implementation - Assumes pagination and potentially filtering
+func (h *TopupHandler) GetTopups(c *gin.Context) {
+	// TODO: Implement logic to parse query params (pagination, filters), call topupService.GetTopups, and handle response/errors
+	 page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	 limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	 // Add other filters as needed (e.g., msisdn, date range)
+
+	 // Assuming topupService.GetTopups exists and takes context, page, limit, and potentially filters
+	 // topups, err := h.topupService.GetTopups(c.Request.Context(), page, limit /*, filters... */)
+	 // if err != nil {
+	 // 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get topups: " + err.Error()})
+	 // 	 return
+	 // }
+	 // c.JSON(http.StatusOK, topups)
+	 c.JSON(http.StatusNotImplemented, gin.H{"message": "GetTopups not implemented", "page": page, "limit": limit})
+}
+
+
