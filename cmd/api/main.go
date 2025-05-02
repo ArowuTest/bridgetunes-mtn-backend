@@ -14,10 +14,11 @@ import (
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/handlers"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories" // Interface package
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/services"
-	// Import the MongoDB repository implementation
 	
 	// Implementation packages
 	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/mongodb" // MongoDB client helper
+	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/mtnapi" // MTN API client
+	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/smsgateway" // SMS Gateway implementations
 	
 	// Import the specific repository implementation package
 	// It's common practice to alias it to avoid name collisions if needed,
@@ -26,8 +27,8 @@ import (
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.LoadConfig(".") // Load from current directory or specify path
+	// Load configuration using the correct function name
+	cfg, err := config.Load() // Changed from LoadConfig
 	 if err != nil {
 	 	log.Fatalf("Failed to load configuration: %v", err)
 	 }
@@ -44,27 +45,59 @@ func main() {
 	}()
 
 	// Initialize Database (Get the specific database instance)
-	 db := mongoClient.Database(cfg.MongoDB.DBName)
+	// Use cfg.MongoDB.Database which was the intended field name
+	 db := mongoClient.Database(cfg.MongoDB.Database) 
 
-	// Initialize Repositories using the implementation package, assigning to interface types
+	// Initialize ALL Repositories using the implementation package
 	var userRepo repositories.UserRepository = mongorepo.NewUserRepository(db)
 	var drawRepo repositories.DrawRepository = mongorepo.NewDrawRepository(db)
 	var topupRepo repositories.TopupRepository = mongorepo.NewTopupRepository(db)
 	var notificationRepo repositories.NotificationRepository = mongorepo.NewNotificationRepository(db)
-	// *** Initialize the new AdminUserRepository ***
 	var adminUserRepo repositories.AdminUserRepository = mongorepo.NewAdminUserRepository(db)
-	// Add other repositories as needed
+	var winnerRepo repositories.WinnerRepository = mongorepo.NewWinnerRepository(db) // Added Winner Repo
+	var templateRepo repositories.TemplateRepository = mongorepo.NewTemplateRepository(db) // Added Template Repo
+	var campaignRepo repositories.CampaignRepository = mongorepo.NewCampaignRepository(db) // Added Campaign Repo
+	// Add other repositories like Blacklist, SystemConfig if needed by services
+	var blacklistRepo repositories.BlacklistRepository = mongorepo.NewBlacklistRepository(db)
+	var systemConfigRepo repositories.SystemConfigRepository = mongorepo.NewSystemConfigRepository(db)
 
-	// Initialize Services
-	// *** Pass adminUserRepo to NewAuthService ***
-	 authService := services.NewAuthService(adminUserRepo /*, cfg.JWT.Secret */) // Pass admin repo, uncomment JWT secret when implemented
-	 drawService := services.NewDrawService(drawRepo)
-	 topupService := services.NewTopupService(topupRepo)
-	 notificationService := services.NewNotificationService(notificationRepo)
-	 userService := services.NewUserService(userRepo)
-	// Add other services as needed
+	// Initialize External Clients
+	 mtnClient := mtnapi.NewClient(cfg.MTN.BaseURL, cfg.MTN.APIKey, cfg.MTN.APISecret, cfg.MTN.MockAPI)
+	
+	// Initialize SMS Gateways
+	 var mtnGateway smsgateway.Gateway
+	 var kodobeGateway smsgateway.Gateway
+	 if cfg.SMS.MockSMSGateway {
+	 	mtnGateway = smsgateway.NewMockGateway("MTN_Mock")
+	 	 kodobeGateway = smsgateway.NewMockGateway("Kodobe_Mock")
+	 } else {
+	 	mtnGateway = smsgateway.NewMTNGateway(cfg.SMS.MTNGateway.BaseURL, cfg.SMS.MTNGateway.APIKey, cfg.SMS.MTNGateway.APISecret)
+	 	 kodobeGateway = smsgateway.NewKodobeGateway(cfg.SMS.KodobeGateway.BaseURL, cfg.SMS.KodobeGateway.APIKey)
+	 }
 
-	// Initialize Handlers
+	// Initialize Services using Legacy constructors with ALL dependencies
+	// Note: Ensure the service instances are stored with the correct type for dependency injection
+	 authService := services.NewAuthService(adminUserRepo /*, cfg.JWT.Secret */) // Pass JWT secret when implemented
+	 legacyUserService := services.NewLegacyUserService(userRepo)
+	 legacyDrawService := services.NewLegacyDrawService(drawRepo, userRepo, winnerRepo)
+	 legacyTopupService := services.NewLegacyTopupService(topupRepo, legacyUserService, mtnClient)
+	 legacyNotificationService := services.NewLegacyNotificationService(
+	 	notificationRepo,
+	 	 templateRepo,
+	 	 campaignRepo,
+	 	 userRepo,
+	 	 mtnGateway,
+	 	 kodobeGateway,
+	 	 cfg.SMS.DefaultGateway,
+	 )
+	 
+	 // Store services using interface types if handlers expect interfaces (recommended)
+	 var userService services.UserService = legacyUserService
+	 var drawService services.DrawService = legacyDrawService
+	 var topupService services.TopupService = legacyTopupService
+	 var notificationService services.NotificationService = legacyNotificationService
+	 
+	// Initialize Handlers (Assuming handlers accept interface types)
 	 authHandler := handlers.NewAuthHandler(authService)
 	 drawHandler := handlers.NewDrawHandler(drawService)
 	 topupHandler := handlers.NewTopupHandler(topupService)
@@ -72,7 +105,7 @@ func main() {
 	 userHandler := handlers.NewUserHandler(userService)
 	// Add other handlers as needed
 
-	// Create Handler Dependencies struct
+	// Create Handler Dependencies struct (Assuming it uses interface types)
 	 handlerDeps := routes.HandlerDependencies{
 		AuthHandler:        authHandler,
 		UserHandler:        userHandler,
@@ -80,6 +113,8 @@ func main() {
 		TopupHandler:       topupHandler,
 		NotificationHandler: notificationHandler,
 		// Add other handlers here if they are defined in HandlerDependencies
+		// Add missing handlers based on routes.go if needed
+		// Example: BlacklistHandler, SystemConfigHandler, WinnerHandler
 	}
 
 	// Setup Router using the centralized function from routes package
