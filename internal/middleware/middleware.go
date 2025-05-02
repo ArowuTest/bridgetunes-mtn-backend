@@ -158,7 +158,7 @@ func LoggerMiddleware() gin.HandlerFunc {
 		 latency := time.Since(start)
 
 		// Retrieve request ID from context
-		 requestID, _ := c.Get("RequestID")
+		 // requestID, _ := c.Get("RequestID")
 		 // requestIDStr := "unknown" // Removed as it was declared but not used
 		 // if id, ok := requestID.(string); ok {
 		 // 	 requestIDStr = id
