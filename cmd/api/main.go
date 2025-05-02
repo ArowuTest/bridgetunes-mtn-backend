@@ -15,6 +15,8 @@ import (
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/handlers"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repository"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/services"
+	// Import the MongoDB repository implementation
+	mongorepo "github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories/mongodb"
 	// "github.com/gin-contrib/cors" // No longer needed here, handled in routes.go
 	// "github.com/gin-gonic/gin" // No longer needed here, handled in routes.go
 )
@@ -40,11 +42,8 @@ func main() {
 	// Initialize Database (Get the specific database instance)
 	db := mongoClient.Database(cfg.MongoDB.DBName)
 
-	// Initialize Repositories
-	userRepo := repository.NewUserRepository(db)
-	drawRepo := repository.NewDrawRepository(db)
-	topupRepo := repository.NewTopupRepository(db)
-	notificationRepo := repository.NewNotificationRepository(db)
+	// Initialize Repositorie		userRepo := mongorepo.NewUserRepository(db)
+		 drawRepo := mongorepo.NewDrawRepository(d		 topupRepo := mongorepo.NewTopupRepository(db)		notificationRepo := mongorepo.NewNotificationRepository(db)
 	// Add other repositories as needed
 
 	// Initialize Services
