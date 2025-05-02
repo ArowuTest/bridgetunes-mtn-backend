@@ -18,6 +18,7 @@ type Config struct {
 type ServerConfig struct {
 	Port         string
 	AllowedHosts []string
+	Env          string // Added based on usage in routes.go
 }
 
 // MongoDBConfig holds MongoDB-specific configuration
