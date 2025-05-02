@@ -66,6 +66,11 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 	}
 	router.Use(cors.New(corsConfig))
 
+	// Add a simple handler for the root path ("/")
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "Service is running"})
+	})
+
 	// Public routes (no authentication required)
 	public := router.Group("/api/v1")
 	{
