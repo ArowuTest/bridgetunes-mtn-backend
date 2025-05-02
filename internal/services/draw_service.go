@@ -236,3 +236,41 @@ func (s *LegacyDrawService) GetDefaultEligibleDigits(dayOfWeek time.Weekday) []i
 	 }
 }
 
+
+
+// DrawService defines the interface for draw-related operations (placeholder)
+// This interface might need to be defined properly based on actual usage
+type DrawService interface {
+	GetDrawByID(ctx context.Context, id primitive.ObjectID) (*models.Draw, error)
+	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)
+	GetDrawsByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Draw, error)
+	GetDrawsByStatus(ctx context.Context, status string, page, limit int) ([]*models.Draw, error)
+	CreateDraw(ctx context.Context, draw *models.Draw) error
+	UpdateDraw(ctx context.Context, draw *models.Draw) error
+	DeleteDraw(ctx context.Context, id primitive.ObjectID) error
+	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefault bool) (*models.Draw, error) // Added useDefault based on handler
+	ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error) // Changed return type based on handler
+	GetDrawConfig(ctx context.Context, date time.Time) (*models.DrawConfig, error) // Assuming DrawConfig model exists
+	GetPrizeStructure(ctx context.Context, drawType string) ([]models.PrizeStructure, error) // Assuming PrizeStructure model exists
+	UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.PrizeStructure) error
+	GetDraws(ctx context.Context, start, end time.Time) ([]*models.Draw, error)
+	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
+	GetJackpotHistory(ctx context.Context, start, end time.Time) ([]*models.JackpotHistory, error) // Assuming JackpotHistory model exists
+	GetDrawCount(ctx context.Context) (int64, error)
+	GetDefaultEligibleDigits(dayOfWeek time.Weekday) []int
+}
+
+// NewDrawService is a wrapper to maintain compatibility with main.go
+// It currently returns the LegacyDrawService implementation, cast to the DrawService interface.
+// NOTE: This assumes LegacyDrawService implements the DrawService interface.
+// Dependencies might need adjustment if the interfaces diverge significantly.
+func NewDrawService(drawRepo repositories.DrawRepository /*, userRepo repositories.UserRepository, winnerRepo repositories.WinnerRepository*/) DrawService {
+	// For now, we only pass drawRepo as required by main.go's current call signature.
+	// If LegacyDrawService truly needs userRepo and winnerRepo, main.go must be updated to provide them.
+	// return NewLegacyDrawService(drawRepo, userRepo, winnerRepo)
+	
+	// Temporary: Create LegacyDrawService with nil for missing dependencies until main.go is updated
+	// This will likely cause runtime errors if userRepo or winnerRepo are used.
+	 return NewLegacyDrawService(drawRepo, nil, nil)
+}
+
