@@ -23,7 +23,7 @@ import (
 	// Import the specific repository implementation package
 	// It's common practice to alias it to avoid name collisions if needed,
 	// but here 'mongorepo' is clear enough.
-	mongorepo "github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories/mongodb"
+	 mongorepo "github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories/mongodb"
 )
 
 func main() {
@@ -57,9 +57,9 @@ func main() {
 	var winnerRepo repositories.WinnerRepository = mongorepo.NewWinnerRepository(db) // Added Winner Repo
 	var templateRepo repositories.TemplateRepository = mongorepo.NewTemplateRepository(db) // Added Template Repo
 	var campaignRepo repositories.CampaignRepository = mongorepo.NewCampaignRepository(db) // Added Campaign Repo
-	// Add other repositories like Blacklist, SystemConfig if needed by services
-	var blacklistRepo repositories.BlacklistRepository = mongorepo.NewBlacklistRepository(db)
-	var systemConfigRepo repositories.SystemConfigRepository = mongorepo.NewSystemConfigRepository(db)
+	// Initialize Blacklist and SystemConfig repositories
+	var blacklistRepo repositories.BlacklistRepository = mongorepo.NewBlacklistRepository(db) // Uncommented
+	var systemConfigRepo repositories.SystemConfigRepository = mongorepo.NewSystemConfigRepository(db) // Uncommented
 
 	// Initialize External Clients
 	 mtnClient := mtnapi.NewClient(cfg.MTN.BaseURL, cfg.MTN.APIKey, cfg.MTN.APISecret, cfg.MTN.MockAPI)
@@ -71,15 +71,17 @@ func main() {
 	 	mtnGateway = smsgateway.NewMockGateway("MTN_Mock")
 	 	 kodobeGateway = smsgateway.NewMockGateway("Kodobe_Mock")
 	 } else {
-	 	mtnGateway = smsgateway.NewMTNGateway(cfg.SMS.MTNGateway.BaseURL, cfg.SMS.MTNGateway.APIKey, cfg.SMS.MTNGateway.APISecret)
-	 	 kodobeGateway = smsgateway.NewKodobeGateway(cfg.SMS.KodobeGateway.BaseURL, cfg.SMS.KodobeGateway.APIKey)
+	 	// Pass the MockSMS flag (which is false here) to the constructors
+	 	mtnGateway = smsgateway.NewMTNGateway(cfg.SMS.MTNGateway.BaseURL, cfg.SMS.MTNGateway.APIKey, cfg.SMS.MTNGateway.APISecret, false)
+	 	 kodobeGateway = smsgateway.NewKodobeGateway(cfg.SMS.KodobeGateway.BaseURL, cfg.SMS.KodobeGateway.APIKey, false)
 	 }
 
 	// Initialize Services using Legacy constructors with ALL dependencies
 	// Note: Ensure the service instances are stored with the correct type for dependency injection
 	 authService := services.NewAuthService(adminUserRepo /*, cfg.JWT.Secret */) // Pass JWT secret when implemented
 	 legacyUserService := services.NewLegacyUserService(userRepo)
-	 legacyDrawService := services.NewLegacyDrawService(drawRepo, userRepo, winnerRepo)
+	 // Pass blacklistRepo and systemConfigRepo to LegacyDrawService
+	 legacyDrawService := services.NewLegacyDrawService(drawRepo, userRepo, winnerRepo, blacklistRepo, systemConfigRepo)
 	 legacyTopupService := services.NewLegacyTopupService(topupRepo, legacyUserService, mtnClient)
 	 legacyNotificationService := services.NewLegacyNotificationService(
 	 	notificationRepo,
@@ -152,6 +154,5 @@ func main() {
 
 	log.Println("Server exiting")
 }
-
 
 
