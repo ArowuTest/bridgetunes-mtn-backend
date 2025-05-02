@@ -103,12 +103,3 @@ func setDefaults() {
 	viper.SetDefault("SMS.MockSMSGateway", true)
 }
 
-
-// LoadConfig is a wrapper around Load to match the expected function name in main.go
-// It accepts the path argument but ignores it, using the default paths defined in Load.
-func LoadConfig(path string) (*Config, error) {
-	// The path argument is ignored here as Load() uses viper's AddConfigPath.
-	// If path-specific loading is truly needed, Load() would need modification.
-	return Load()
-}
-
