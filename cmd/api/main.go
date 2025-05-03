@@ -81,7 +81,7 @@ func main() {
 
 	// Initialize Services using Legacy constructors with ALL dependencies
 	// Note: Ensure the service instances are stored with the correct type for dependency injection
-	 authService := services.NewAuthService(adminUserRepo /*, cfg.JWT.Secret */) // Pass JWT secret when implemented
+	 authService := services.NewAuthService(adminUserRepo, cfg.JWT.Secret, cfg.JWT.ExpiresIn) // Pass JWT secret and expiration
 	 legacyUserService := services.NewLegacyUserService(userRepo)
 	 // Pass blacklistRepo and systemConfigRepo to LegacyDrawService
 	 legacyDrawService := services.NewLegacyDrawService(drawRepo, userRepo, winnerRepo, blacklistRepo, systemConfigRepo)
@@ -163,7 +163,6 @@ func main() {
 
 	log.Println("Server exiting")
 }
-
 
 
 
