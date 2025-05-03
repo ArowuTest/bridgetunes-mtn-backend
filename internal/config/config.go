@@ -74,6 +74,10 @@ func Load() (*Config, error) {
 	// Use underscore replacement for environment variables (e.g., SERVER_ALLOWED_HOSTS)
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
+	// Explicitly bind the JWT_SECRET environment variable
+	// This is often more reliable than relying solely on AutomaticEnv()
+	viper.BindEnv("JWT.Secret", "JWT_SECRET")
+
 	// Set defaults
 	setDefaults()
 
@@ -118,6 +122,7 @@ func setDefaults() {
 	viper.SetDefault("SMS.DefaultGateway", "mtn")
 	viper.SetDefault("SMS.MockSMSGateway", true)
 }
+
 
 
 
