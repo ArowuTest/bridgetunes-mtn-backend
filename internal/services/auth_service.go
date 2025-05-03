@@ -9,10 +9,9 @@ import (
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
+	"github.com/golang-jwt/jwt/v5" // Import JWT library
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
-	// TODO: Add JWT library import (e.g., "github.com/golang-jwt/jwt/v5")
-	// import "github.com/golang-jwt/jwt/v5"
 )
 
 // AuthService defines the interface for authentication operations
@@ -23,15 +22,16 @@ type AuthService interface {
 
 type authService struct {
 	adminUserRepo repositories.AdminUserRepository // Use AdminUserRepository
-	// TODO: Add JWT secret key from config
-	// jwtSecret string
+	jwtSecret     string
+	jwtExpiresIn  int
 }
 
 // NewAuthService creates a new AuthService implementation
-func NewAuthService(adminUserRepo repositories.AdminUserRepository /*, jwtSecret string*/) AuthService { // Accept AdminUserRepository
+func NewAuthService(adminUserRepo repositories.AdminUserRepository, jwtSecret string, jwtExpiresIn int) AuthService { // Accept AdminUserRepository and JWT config
 	return &authService{
 		adminUserRepo: adminUserRepo,
-		// jwtSecret: jwtSecret,
+		jwtSecret:     jwtSecret,
+		jwtExpiresIn:  jwtExpiresIn,
 	}
 }
 
@@ -115,13 +115,26 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (stri
 
 	log.Printf("[DEBUG] Login: Password comparison successful for %s", req.Email)
 
-	// Generate JWT token (Placeholder)
-	// TODO: Implement actual JWT generation using a library and secret key
-	log.Printf("[DEBUG] Login: Generating dummy JWT token for %s", req.Email)
+	// Generate JWT token
+	log.Printf("[DEBUG] Login: Generating JWT token for %s", req.Email)
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub":   adminUser.ID.Hex(), // Subject (user ID)
+		"email": adminUser.Email,
+		"role":  adminUser.Role,
+		"iat":   now.Unix(),                                       // Issued At
+		"exp":   now.Add(time.Second * time.Duration(s.jwtExpiresIn)).Unix(), // Expiration Time
+	}
 
-	// Return a dummy token for now
-	return "dummy-jwt-token-replace-with-real-one", nil
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(s.jwtSecret))
+	 if err != nil {
+	 	log.Printf("[ERROR] Login: Failed to sign JWT token for %s: %v", req.Email, err)
+	 	return "", fmt.Errorf("failed to generate token: %w", err)
+	 }
+
+	log.Printf("[DEBUG] Login: JWT token generated successfully for %s", req.Email)
+	return tokenString, nil
 }
-
 
 
