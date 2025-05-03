@@ -25,7 +25,7 @@ type HandlerDependencies struct {
 // It now accepts HandlerDependencies to allow for proper dependency injection.
 func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 	// Set Gin mode based on config
-	if cfg.Server.Env == "production" {
+	 if cfg.Server.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
 		gin.SetMode(gin.DebugMode)
@@ -50,7 +50,7 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 		AllowOriginFunc: func(origin string) bool {
 			// Allow requests from configured origins
 			for _, allowedOrigin := range cfg.Server.AllowedHosts {
-				if strings.EqualFold(allowedOrigin, origin) || allowedOrigin == "*" {
+				 if strings.EqualFold(allowedOrigin, origin) || allowedOrigin == "*" {
 					return true
 				}
 			}
@@ -68,16 +68,16 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 
 	// Add a simple handler for the root path ("/")
 	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "Service is running"})
+		 c.JSON(200, gin.H{"status": "Service is running"})
 	})
 
 	// Public routes (no authentication required)
 	public := router.Group("/api/v1")
 	{
-		auth := public.Group("/auth")
+		 auth := public.Group("/auth")
 		{
-			auth.POST("/login", deps.AuthHandler.Login)
-			auth.POST("/register", deps.AuthHandler.Register) // Assuming register handler exists
+			 auth.POST("/login", deps.AuthHandler.Login)
+			 auth.POST("/register", deps.AuthHandler.Register) // Assuming register handler exists
 			// Add other public auth routes like refresh token if needed
 		}
 
@@ -89,51 +89,47 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 	protected := router.Group("/api/v1")
 	protected.Use(middleware.JWTAuthMiddleware(cfg)) // Apply JWT authentication middleware
 	{
-		users := protected.Group("/users")
+		 users := protected.Group("/users")
 		{
-			users.GET("/me", deps.UserHandler.GetMe) // Example protected user route
+			 users.GET("/me", deps.UserHandler.GetMe) // Example protected user route
 			// Add other protected user routes
 		}
 
-		draws := protected.Group("/draws")
+		 draws := protected.Group("/draws")
 		{
-			draws.POST("", deps.DrawHandler.CreateDraw)
-			draws.GET("", deps.DrawHandler.GetDraws)
-			draws.GET("/:id", deps.DrawHandler.GetDrawByID)
-			draws.PUT("/:id", deps.DrawHandler.UpdateDraw)
-			draws.DELETE("/:id", deps.DrawHandler.DeleteDraw)
-			draws.POST("/schedule", deps.DrawHandler.ScheduleDraw)
-			draws.POST("/execute/:id", deps.DrawHandler.ExecuteDraw)
-			draws.GET("/winners/:id", deps.DrawHandler.GetWinners)
-			draws.GET("/date/:date", deps.DrawHandler.GetDrawByDate) // The route causing 404 earlier
-			draws.GET("/default-digits/:day", deps.DrawHandler.GetDefaultDigitsForDay) // The route causing 404 earlier
-			draws.GET("/config", deps.DrawHandler.GetDrawConfig) // Assuming this handler exists
-			draws.GET("/prize-structure", deps.DrawHandler.GetPrizeStructure) // Assuming this handler exists
+			 draws.POST("", deps.DrawHandler.CreateDraw)
+			 draws.GET("", deps.DrawHandler.GetDraws)
+			 draws.GET("/:id", deps.DrawHandler.GetDrawByID)
+			 draws.PUT("/:id", deps.DrawHandler.UpdateDraw)
+			 draws.DELETE("/:id", deps.DrawHandler.DeleteDraw)
+			 draws.POST("/schedule", deps.DrawHandler.ScheduleDraw)
+			 draws.POST("/execute/:id", deps.DrawHandler.ExecuteDraw)
+			 draws.GET("/winners/:id", deps.DrawHandler.GetWinners)
+			 draws.GET("/date/:date", deps.DrawHandler.GetDrawByDate) // The route causing 404 earlier
+			 draws.GET("/default-digits/:day", deps.DrawHandler.GetDefaultDigitsForDay) // The route causing 404 earlier
+			 draws.GET("/config", deps.DrawHandler.GetDrawConfig) // Assuming this handler exists
+			 draws.GET("/prize-structure", deps.DrawHandler.GetPrizeStructure) // Assuming this handler exists
 			// Add other draw routes
 		}
 
-		topups := protected.Group("/topups")
+		 topups := protected.Group("/topups")
 		{
-			topups.POST("", deps.TopupHandler.CreateTopup)
-			topups.GET("", deps.TopupHandler.GetTopups)
+			 topups.POST("", deps.TopupHandler.CreateTopup)
+			 topups.GET("", deps.TopupHandler.GetTopups)
 			// Add other topup routes
 		}
 
-		notifications := protected.Group("/notifications")
+		 notifications := protected.Group("/notifications")
 		{
-			notifications.GET("", deps.NotificationHandler.GetNotifications)
+			 notifications.GET("", deps.NotificationHandler.GetNotifications)
 			// Add other notification routes
 		}
 
-		// Dashboard route (needs a handler)
-		// Assuming a DashboardHandler exists or one of the existing handlers provides this
-		// Example using UserHandler if it has a GetDashboardStats method:
-		// dashboard := protected.Group("/dashboard")
-		// {
-		// 	dashboard.GET("/stats", deps.UserHandler.GetDashboardStats) // The route causing 404 earlier
-		// }
-		// If no handler exists for dashboard stats, this route cannot be added yet.
-		// For now, we will omit the /dashboard/stats route until a handler is confirmed.
+		// Dashboard route
+		 dashboard := protected.Group("/dashboard")
+		{
+			 dashboard.GET("/stats", deps.UserHandler.GetDashboardStats) // Add the dashboard stats route
+		}
 	}
 
 	// Handle OPTIONS requests for preflight checks (CORS)
@@ -141,10 +137,11 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 
 	// Route for 404 Not Found
 	router.NoRoute(func(c *gin.Context) {
-		c.JSON(404, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
+		 c.JSON(404, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
 	})
 
 	return router
 }
+
 
 
