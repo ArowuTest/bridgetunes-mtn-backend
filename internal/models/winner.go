@@ -6,21 +6,30 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Winner represents a winner in a draw
+// ClaimStatus represents the status of a prize claim
+type ClaimStatus string
+
+const (
+	ClaimStatusPending   ClaimStatus = "PENDING"   // Winner selected, claim not yet processed
+	ClaimStatusProcessing ClaimStatus = "PROCESSING" // Claim is being processed
+	ClaimStatusPaid       ClaimStatus = "PAID"       // Prize has been paid/disbursed
+	ClaimStatusFailed     ClaimStatus = "FAILED"     // Claim processing failed
+	ClaimStatusIneligible ClaimStatus = "INELIGIBLE" // Winner found ineligible post-selection
+)
+
+// Winner represents a winning entry in a draw
 type Winner struct {
-	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	MSISDN         string             `bson:"msisdn" json:"msisdn"`
-	MaskedMSISDN   string             `bson:"maskedMsisdn" json:"maskedMsisdn"` // Stores masked number, e.g., "080*****178"
-	DrawID         primitive.ObjectID `bson:"drawId" json:"drawId"`
-	PrizeCategory  string             `bson:"prizeCategory" json:"prizeCategory"`
-	PrizeAmount    float64            `bson:"prizeAmount" json:"prizeAmount"`
-	IsOptedIn      bool               `bson:"isOptedIn" json:"isOptedIn"` // User's opt-in status at time of draw
-	IsValid        bool               `bson:"isValid" json:"isValid"` // Whether the win is valid (e.g., opted-in for jackpot)
-	Points         int                `bson:"points" json:"points"` // User's points at time of draw
-	WinDate        time.Time          `bson:"winDate" json:"winDate"`
-	ClaimStatus    string             `bson:"claimStatus" json:"claimStatus"` // PENDING, CLAIMED, EXPIRED
-	ClaimDate      *time.Time         `bson:"claimDate,omitempty" json:"claimDate,omitempty"` // Pointer to allow null
-	NotifiedAt     *time.Time         `bson:"notifiedAt,omitempty" json:"notifiedAt,omitempty"` // Kept for compatibility, changed to pointer
-	CreatedAt      time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt      time.Time          `bson:"updatedAt" json:"updatedAt"`
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	DrawID        primitive.ObjectID `bson:"drawId" json:"drawId"`
+	UserID        primitive.ObjectID `bson:"userId" json:"userId"` // Added UserID field
+	MSISDN        string             `bson:"msisdn" json:"msisdn"`
+	PrizeCategory string             `bson:"prizeCategory" json:"prizeCategory"`
+	PrizeAmount   float64            `bson:"prizeAmount" json:"prizeAmount"`
+	WinDate       time.Time          `bson:"winDate" json:"winDate"`
+	ClaimStatus   ClaimStatus        `bson:"claimStatus" json:"claimStatus"`
+	ClaimNotes    string             `bson:"claimNotes,omitempty" json:"claimNotes,omitempty"`
+	ClaimDate     time.Time          `bson:"claimDate,omitempty" json:"claimDate,omitempty"`
+	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
+
