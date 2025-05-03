@@ -12,7 +12,7 @@ import (
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	// "go.mongodb.org/mongo-driver/bson/primitive" // Removed unused import
 	"golang.org/x/exp/slog"
 )
 
