@@ -19,6 +19,7 @@ import (
 )
 
 // Compile-time check to ensure DrawServiceImpl implements DrawService
+// Note: The DrawService interface itself is defined in service.go
 var _ DrawService = (*DrawServiceImpl)(nil)
 
 // DrawServiceImpl handles draw-related business logic according to redesign plan
@@ -330,7 +331,6 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 				 weightedPoolB = remainingPool // Update pool for next selection
 
 				 if selectionErr != nil {
-					 // Corrected line:
 					 slog.Error("Error selecting weighted consolation winner", "error", selectionErr)
 					 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR selecting weighted consolation winner: %s", selectionErr.Error()))
 					 continue // Skip this selection attempt
@@ -551,8 +551,8 @@ func (s *DrawServiceImpl) AllocatePointsForTopup(ctx context.Context, msisdn str
 	 transaction := &models.PointTransaction{
 		 UserID:      user.ID,
 		 MSISDN:      msisdn,
-		 Points:      pointsToAdd,
-		 Source:      "TOPUP",
+		 Points:      pointsToAdd, // Corrected field name
+		 Source:      "TOPUP",     // Corrected field name
 		 Description: fmt.Sprintf("Points for N%.2f topup", amount),
 		 Timestamp:   topupTime,
 	 }
@@ -569,6 +569,7 @@ func (s *DrawServiceImpl) AllocatePointsForTopup(ctx context.Context, msisdn str
 // --- Internal Helper Functions ---
 
 // calculatePoints calculates points based on topup amount
+// This is the primary definition, the one in topup_service.go should be removed
 func calculatePoints(amount float64) int {
 	pointsToAdd := 0
 	 if amount >= 1000 {
@@ -639,8 +640,8 @@ func maskMsisdn(msisdn string) string {
 	 return msisdn // Return as is if too short to mask meaningfully
 }
 
-// --- DrawService Interface Definition ---
-
+// --- DrawService Interface Definition (REMOVED - Defined in service.go) ---
+/*
 // DrawService defines the interface for draw operations
 type DrawService interface {
 	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error)
@@ -654,3 +655,4 @@ type DrawService interface {
 	GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error)
 	AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64, topupTime time.Time) error
 }
+*/
