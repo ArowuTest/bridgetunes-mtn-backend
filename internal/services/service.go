@@ -10,15 +10,18 @@ import (
 
 // DrawService defines the interface for draw-related operations
 type DrawService interface {
-	GetDrawConfig(ctx context.Context, date time.Time) (map[string]interface{}, error)
-	GetPrizeStructure(ctx context.Context, drawType string) ([]models.PrizeStructure, error)
-	UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.PrizeStructure) error
+	// GetDrawConfig(ctx context.Context, date time.Time) (map[string]interface{}, error) // Example, might not be needed
+	GetPrizeStructure(ctx context.Context, drawType string) ([]models.Prize, error) // Updated return type
+	UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.Prize) error // Updated param type
 	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error)
 	ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error)
-	GetDrawByID(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error)
+	GetDrawByID(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error) // Ensure this is implemented
 	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
 	GetDraws(ctx context.Context, startDate, endDate time.Time) ([]*models.Draw, error)
-	GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
+	// GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) // Example, might need specific model
+	GetDefaultDigitsForDay(ctx context.Context, dayOfWeek time.Weekday) []int // Added based on handler
+	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)    // Added based on handler
+	GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error)      // Added for build error
 }
 
 // UserService defines the interface for user-related operations (Add other service interfaces as needed)
@@ -37,6 +40,7 @@ type UserService interface {
 	OptOut(ctx context.Context, msisdn string) error
 	AddPoints(ctx context.Context, msisdn string, points int) error
 	GetUserCount(ctx context.Context) (int64, error)
+	AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64) error // Added for draw logic
 }
 
 // TopupService defines the interface for topup-related operations
@@ -73,4 +77,5 @@ type NotificationService interface {
 	GetCampaignCount(ctx context.Context) (int64, error)
 	GetTemplateCount(ctx context.Context) (int64, error)
 }
+
 
