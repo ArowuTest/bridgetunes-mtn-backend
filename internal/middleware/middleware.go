@@ -2,105 +2,73 @@ package middleware
 
 import (
 	"errors"
+	"fmt" // Added fmt import
+	"log" // Added log import
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/config"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5" // Use the newer library
 )
 
 // JWTAuthMiddleware is a middleware for JWT authentication
 func JWTAuthMiddleware(cfg *config.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Get the Authorization header
-		// Ensure header retrieval is case-insensitive if needed, though GetHeader is typically sufficient
-		// Consider trimming whitespace from the header value
-		 authHeader := c.GetHeader("Authorization")
-		 if authHeader == "" {
-			// Provide a clear error message
-			// Use standard HTTP status codes
-			 c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			 c.Abort()
-			 return
-		}
+	// Check if JWT secret is configured. If not, log a fatal error as middleware cannot function.
+	 if cfg.JWT.Secret == "" {
+	 	log.Fatal("[FATAL] JWTAuthMiddleware: JWT_SECRET is not configured in the environment variables!")
+	 }
+	 jwtSecret := []byte(cfg.JWT.Secret)
 
-		// Check if the Authorization header has the correct format
-		// Ensure splitting handles potential extra spaces correctly (strings.Fields might be an alternative)
-		// Current split logic is standard and generally okay.
-		 parts := strings.Split(authHeader, " ")
-		 if len(parts) != 2 || parts[0] != "Bearer" {
-			// Provide a clear error message about the expected format
-			 c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
-			 c.Abort()
-			 return
-		}
+	 return func(c *gin.Context) {
+	 	const BearerSchema = "Bearer "
+	 	 authHeader := c.GetHeader("Authorization")
+	 	 if authHeader == "" {
+	 	 	log.Println("[WARN] JWTAuthMiddleware: Authorization header is missing")
+	 	 	 c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+	 	 	return
+	 	 }
 
-		// Extract the token
-		// Consider trimming whitespace from the token string itself
-		 tokenString := parts[1]
+	 	 if !strings.HasPrefix(authHeader, BearerSchema) {
+	 	 	log.Println("[WARN] JWTAuthMiddleware: Authorization header format is invalid")
+	 	 	 c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header must start with Bearer "})
+	 	 	return
+	 	 }
 
-		// Parse and validate the token
-		// Ensure the secret key retrieval from config is robust
-		// Handle potential errors during parsing gracefully
-		 token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Validate the signing method to prevent algorithm downgrade attacks
-			 if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				// Log the unexpected signing method for security monitoring
-				// log.Printf("Unexpected signing method: %v", token.Header["alg"])
-				 return nil, errors.New("unexpected signing method")
-			}
-			// Ensure cfg.JWT.Secret is not empty
-			 if cfg.JWT.Secret == "" {
-			 	 // Log this critical configuration error
-			 	 // log.Println("Error: JWT Secret is not configured")
-			 	 return nil, errors.New("JWT secret not configured")
-			 }
-			 return []byte(cfg.JWT.Secret), nil
-		})
+	 	 tokenString := authHeader[len(BearerSchema):]
 
-		// Handle parsing errors (e.g., malformed token, signature mismatch)
-		 if err != nil {
-		 	 // Log the specific error for debugging
-		 	 // log.Printf("Token parsing error: %v", err)
-			 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()})
-			 c.Abort()
-			 return
-		}
+	 	 token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	 	 	// Validate the alg is what you expect:
+	 	 	 if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+	 	 	 	return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+	 	 	 }
+	 	 	return jwtSecret, nil
+	 	 })
 
-		// Check if the token is valid and extract claims
-		// Ensure claims extraction is safe (type assertion)
-		 if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			// Check if the token is expired
-			// Validate the type of the 'exp' claim (should be float64 for standard JWT)
-			 if exp, ok := claims["exp"].(float64); ok {
-				// Compare expiration time with current time
-				 if time.Unix(int64(exp), 0).Before(time.Now()) {
-					 c.JSON(http.StatusUnauthorized, gin.H{"error": "Token is expired"})
-					 c.Abort()
-					 return
-				}
-			} else {
-				// Handle case where 'exp' claim is missing or not a number
-				 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims (expiration)"})
-				 c.Abort()
-				 return
-			}
+	 	 if err != nil {
+	 	 	log.Printf("[WARN] JWTAuthMiddleware: Token parsing/validation failed: %v", err)
+	 	 	// Handle specific errors like expiration
+	 	 	 if errors.Is(err, jwt.ErrTokenExpired) {
+	 	 	 	 c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token has expired"})
+	 	 	 } else {
+	 	 	 	 c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()}) // Include error details
+	 	 	 }
+	 	 	return
+	 	 }
 
-			// Set the claims in the context for downstream handlers
-			// Consider setting specific claims like user ID, role directly if needed
-			// e.g., c.Set("userID", claims["user_id"])
-			// e.g., c.Set("userRole", claims["role"])
-			 c.Set("claims", claims)
-			 c.Next() // Proceed to the next handler
-		} else {
-			// Handle invalid token (e.g., signature invalid, claims invalid)
-			 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			 c.Abort()
-			 return
-		}
-	}
+	 	 if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+	 	 	// Token is valid. Optionally set claims in context for downstream handlers.
+	 	 	 c.Set("userID", claims["sub"])
+	 	 	 c.Set("userEmail", claims["email"])
+	 	 	 c.Set("userRole", claims["role"])
+	 	 	log.Printf("[DEBUG] JWTAuthMiddleware: Token validated successfully for user %s", claims["email"])
+	 	 	 c.Next() // Proceed to the next handler
+	 	 } else {
+	 	 	log.Println("[WARN] JWTAuthMiddleware: Token claims invalid or token is not valid")
+	 	 	 c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+	 	 }
+	 }
 }
 
 // CORSMiddleware is a middleware for CORS
@@ -192,4 +160,5 @@ func LoggerMiddleware() gin.HandlerFunc {
 		 // c.Writer.Header().Set("X-Request-ID", requestID.(string))
 	}
 }
+
 
