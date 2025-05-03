@@ -330,5 +330,327 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 				 weightedPoolB = remainingPool // Update pool for next selection
 
 				 if selectionErr != nil {
-					 slog.Error("Error selecting weighted consolation winne
-(Content truncated due to size limit. Use line ranges to read in chunks)
+					 // Corrected line:
+					 slog.Error("Error selecting weighted consolation winner", "error", selectionErr)
+					 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR selecting weighted consolation winner: %s", selectionErr.Error()))
+					 continue // Skip this selection attempt
+				 }
+
+				 // Avoid selecting the same MSISDN multiple times in the same draw (REQFUNC039)
+				 if selectedConsolationMSISDNs[winnerUser.MSISDN] {
+					 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Skipping duplicate consolation winner selection: %s", maskMsisdn(winnerUser.MSISDN)))
+					 i-- // Decrement i to retry selection for this prize slot
+					 continue
+				 }
+				 selectedConsolationMSISDNs[winnerUser.MSISDN] = true
+
+				 // Create Winner record
+				 winner := &models.Winner{
+					 DrawID:       draw.ID,
+					 UserID:       winnerUser.ID,
+					 MSISDN:       winnerUser.MSISDN,
+					 PrizeCategory: prize.Category,
+					 PrizeAmount:  prize.Amount,
+					 DrawDate:     draw.DrawDate,
+					 ClaimStatus:  models.ClaimStatusPending,
+					 CreatedAt:    time.Now(),
+					 UpdatedAt:    time.Now(),
+				 }
+				 consolationWinners = append(consolationWinners, winner)
+				 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Consolation Winner Selected (%s): %s (Points: %d)", prize.Category, maskMsisdn(winnerUser.MSISDN), winnerUser.Points))
+			 }
+		 }
+	 } else {
+		 draw.ExecutionLog = append(draw.ExecutionLog, "Pool B is empty, cannot select Consolation Winners.")
+	 }
+
+	 // 8. Create Winner Records in DB
+	 allWinners := consolationWinners
+	 if isJackpotWinnerValid && potentialJackpotWinner != nil {
+		 // Find the jackpot prize details
+		 var jackpotPrize models.Prize
+		 for _, p := range draw.Prizes {
+			 if p.Category == models.JackpotCategory {
+				 jackpotPrize = p
+				 break
+			 }
+		 }
+		 if jackpotPrize.Category == "" {
+			 // This should ideally not happen if prize structure is fetched correctly
+			 slog.Error("Jackpot prize category not found in draw prize structure", "drawId", draw.ID)
+			 err = errors.New("jackpot prize category not found")
+			 return draw, err
+		 }
+
+		 jackpotWinnerRecord := &models.Winner{
+			 DrawID:       draw.ID,
+			 UserID:       potentialJackpotWinner.ID,
+			 MSISDN:       potentialJackpotWinner.MSISDN,
+			 PrizeCategory: models.JackpotCategory,
+			 PrizeAmount:  draw.CalculatedJackpotAmount, // Use the final calculated amount
+			 DrawDate:     draw.DrawDate,
+			 ClaimStatus:  models.ClaimStatusPending,
+			 CreatedAt:    time.Now(),
+			 UpdatedAt:    time.Now(),
+		 }
+		 allWinners = append(allWinners, jackpotWinnerRecord)
+	 }
+
+	 if len(allWinners) > 0 {
+		 err = s.winnerRepo.CreateMany(ctx, allWinners)
+		 if err != nil {
+			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR saving winners to DB: %s", err.Error()))
+			 return draw, fmt.Errorf("failed to save winners: %w", err)
+		 }
+		 draw.NumWinners = len(allWinners)
+		 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Successfully saved %d winners to DB", len(allWinners)))
+	 } else {
+		 draw.NumWinners = 0
+		 draw.ExecutionLog = append(draw.ExecutionLog, "No winners selected or saved.")
+	 }
+
+	 // 9. Final Update (Handled by defer)
+	 return draw, nil // err will be nil here if execution reached the end
+}
+
+// --- Helper & Other Methods ---
+
+// GetPrizeStructure fetches and parses the prize structure from config
+func (s *DrawServiceImpl) GetPrizeStructure(ctx context.Context, drawType string) ([]models.Prize, error) {
+	 configKey := "prize_structure_" + strings.ToUpper(drawType)
+	 config, err := s.systemConfigRepo.FindByKey(ctx, configKey)
+	 if err != nil {
+		 slog.Error("Failed to fetch prize structure config", "error", err, "key", configKey)
+		 return nil, fmt.Errorf("failed to fetch prize structure config %s: %w", configKey, err)
+	 }
+
+	 // Value is likely stored as a stringified JSON array or similar
+	 // We need to parse it into []models.Prize
+	 var prizes []models.Prize
+	 switch v := config.Value.(type) {
+	 case string:
+		 // Attempt to unmarshal if it's a JSON string
+		 err = json.Unmarshal([]byte(v), &prizes)
+		 if err != nil {
+			 slog.Error("Failed to unmarshal prize structure JSON string", "error", err, "key", configKey, "value", v)
+			 return nil, fmt.Errorf("invalid prize structure format (string) in config %s: %w", configKey, err)
+		 }
+	 case primitive.A: // Handle if stored directly as MongoDB array
+		 // Convert primitive.A to []models.Prize (requires careful handling of types)
+		 tempBytes, err := json.Marshal(v) // Marshal to JSON bytes first
+		 if err != nil {
+			 slog.Error("Failed to marshal prize structure BSON array", "error", err, "key", configKey)
+			 return nil, fmt.Errorf("failed to marshal prize structure BSON array %s: %w", configKey, err)
+		 }
+		 err = json.Unmarshal(tempBytes, &prizes) // Unmarshal JSON bytes into struct slice
+		 if err != nil {
+			 slog.Error("Failed to unmarshal prize structure from BSON array", "error", err, "key", configKey)
+			 return nil, fmt.Errorf("failed to unmarshal prize structure from BSON array %s: %w", configKey, err)
+		 }
+	 default:
+		 slog.Error("Unsupported prize structure format in config", "key", configKey, "valueType", fmt.Sprintf("%T", config.Value))
+		 return nil, fmt.Errorf("unsupported prize structure format in config %s", configKey)
+	 }
+
+	 if len(prizes) == 0 {
+		 slog.Error("Prize structure config is empty or failed to parse", "key", configKey)
+		 return nil, fmt.Errorf("prize structure config %s is empty or invalid", configKey)
+	 }
+
+	 return prizes, nil
+}
+
+// UpdatePrizeStructure updates the prize structure in the system config
+func (s *DrawServiceImpl) UpdatePrizeStructure(ctx context.Context, drawType string, prizes []models.Prize) error {
+	 configKey := "prize_structure_" + strings.ToUpper(drawType)
+	 // Store as JSON string or directly if DB supports complex types well
+	 // Storing as JSON string is often safer for cross-language/driver compatibility
+	 prizeBytes, err := json.Marshal(prizes)
+	 if err != nil {
+		 slog.Error("Failed to marshal prize structure to JSON", "error", err)
+		 return fmt.Errorf("failed to marshal prize structure: %w", err)
+	 }
+
+	 err = s.systemConfigRepo.UpsertByKey(ctx, configKey, string(prizeBytes), fmt.Sprintf("%s prize structure", strings.Title(strings.ToLower(drawType))))
+	 if err != nil {
+		 slog.Error("Failed to upsert prize structure config", "error", err, "key", configKey)
+		 return fmt.Errorf("failed to save prize structure config %s: %w", configKey, err)
+	 }
+	 slog.Info("Prize structure updated successfully", "key", configKey)
+	 return nil
+}
+
+// GetDrawByDate retrieves a draw by its date
+func (s *DrawServiceImpl) GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error) {
+	 return s.drawRepo.FindByDate(ctx, date)
+}
+
+// GetDrawByID retrieves a draw by its ID
+func (s *DrawServiceImpl) GetDrawByID(ctx context.Context, id primitive.ObjectID) (*models.Draw, error) {
+	 return s.drawRepo.FindByID(ctx, id)
+}
+
+// GetAllDraws retrieves all draws (consider pagination)
+func (s *DrawServiceImpl) GetAllDraws(ctx context.Context) ([]*models.Draw, error) {
+	 return s.drawRepo.FindAll(ctx)
+}
+
+// GetWinnersByDrawID retrieves winners for a specific draw
+func (s *DrawServiceImpl) GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
+	 return s.winnerRepo.FindByDrawID(ctx, drawID)
+}
+
+// GetJackpotStatus retrieves the current jackpot status (e.g., current amount)
+// This might involve finding the latest draw or a dedicated status record
+func (s *DrawServiceImpl) GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error) {
+	 // Option 1: Find the latest completed/scheduled draw and use its jackpot amount
+	 // Option 2: Query a dedicated JackpotStatus collection/document (more robust)
+
+	 // Using Option 1 for now (simpler, but less accurate if draws are out of order)
+	 // Find the most recent draw (regardless of status? or only completed/scheduled?)
+	 // Need a FindLatestDraw method in the repository
+
+	 // Placeholder implementation - returns a static status
+	 // TODO: Implement proper logic based on chosen approach (latest draw or dedicated status)
+	 status := &models.JackpotStatus{
+		 CurrentAmount: 5000000.00, // Example static value
+		 LastDrawDate:  time.Now().AddDate(0, 0, -1),
+		 NextDrawDate:  time.Now().AddDate(0, 0, 1),
+		 UpdatedAt:     time.Now(),
+	 }
+	 slog.Warn("GetJackpotStatus using placeholder implementation")
+	 return status, nil
+}
+
+// AllocatePointsForTopup calculates and allocates points for a topup event
+// This might be called by a separate process handling topup events
+func (s *DrawServiceImpl) AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64, topupTime time.Time) error {
+	 user, err := s.userRepo.FindByMSISDN(ctx, msisdn)
+	 if err != nil {
+		 if errors.Is(err, mongo.ErrNoDocuments) {
+			 slog.Info("User not found for point allocation", "msisdn", maskMsisdn(msisdn))
+			 return nil // Not an error if user doesn't exist
+		 }
+		 slog.Error("Failed to find user for point allocation", "error", err, "msisdn", maskMsisdn(msisdn))
+		 return fmt.Errorf("failed to find user %s: %w", msisdn, err)
+	 }
+
+	 pointsToAdd := calculatePoints(amount)
+	 if pointsToAdd <= 0 {
+		 return nil // No points to add
+	 }
+
+	 // Atomically increment user points
+	 err = s.userRepo.IncrementPoints(ctx, user.ID, pointsToAdd)
+	 if err != nil {
+		 slog.Error("Failed to increment user points", "error", err, "userId", user.ID, "pointsToAdd", pointsToAdd)
+		 return fmt.Errorf("failed to increment points for user %s: %w", user.ID.Hex(), err)
+	 }
+
+	 // Create a point transaction record
+	 transaction := &models.PointTransaction{
+		 UserID:      user.ID,
+		 MSISDN:      msisdn,
+		 Points:      pointsToAdd,
+		 Source:      "TOPUP",
+		 Description: fmt.Sprintf("Points for N%.2f topup", amount),
+		 Timestamp:   topupTime,
+	 }
+	 err = s.pointTransactionRepo.Create(ctx, transaction)
+	 if err != nil {
+		 slog.Error("Failed to create point transaction record", "error", err, "userId", user.ID)
+		 // Log error but don't fail the overall operation
+	 }
+
+	 slog.Info("Points allocated successfully", "userId", user.ID, "msisdn", maskMsisdn(msisdn), "pointsAdded", pointsToAdd)
+	 return nil
+}
+
+// --- Internal Helper Functions ---
+
+// calculatePoints calculates points based on topup amount
+func calculatePoints(amount float64) int {
+	pointsToAdd := 0
+	 if amount >= 1000 {
+		 pointsToAdd = 10
+	 } else {
+		 pointsToAdd = int(amount / 100) // Integer division gives points per N100
+	 }
+	 return pointsToAdd
+}
+
+// createWeightedPool creates a slice where each user appears once per point they have
+func createWeightedPool(users []*models.User) []*models.User {
+	 totalWeight := 0
+	 for _, u := range users {
+		 // Ensure points are non-negative
+		 if u.Points > 0 {
+			 totalWeight += u.Points
+		 }
+	 }
+
+	 if totalWeight == 0 {
+		 // If no users have points, return the original pool (equal weighting)
+		 slog.Warn("No users in the pool have points, falling back to equal weighting.")
+		 return users
+	 }
+
+	 weightedPool := make([]*models.User, 0, totalWeight)
+	 for _, u := range users {
+		 if u.Points > 0 {
+			 for i := 0; i < u.Points; i++ {
+				 weightedPool = append(weightedPool, u)
+			 }
+		 }
+	 }
+	 return weightedPool
+}
+
+// selectWeightedWinner selects a winner randomly from the weighted pool
+func selectWeightedWinner(weightedPool []*models.User) (winner *models.User, remainingPool []*models.User, err error) {
+	 if len(weightedPool) == 0 {
+		 return nil, weightedPool, errors.New("cannot select winner from empty pool")
+	 }
+
+	 // Seed the random number generator (important!)
+	 // Using time.Now().UnixNano() is common but not perfectly random for rapid calls.
+	 // Consider a shared rand.Source if performance is critical.
+	 r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	 winnerIndex := r.Intn(len(weightedPool))
+	 winner = weightedPool[winnerIndex]
+
+	 // Create the remaining pool by removing *all* instances of the winner
+	 remainingPool = make([]*models.User, 0, len(weightedPool)-winner.Points) // Approximate capacity
+	 for _, user := range weightedPool {
+		 if user.ID != winner.ID {
+			 remainingPool = append(remainingPool, user)
+		 }
+	 }
+
+	 return winner, remainingPool, nil
+}
+
+// maskMsisdn masks an MSISDN for logging
+func maskMsisdn(msisdn string) string {
+	 if len(msisdn) > 6 {
+		 return msisdn[:3] + "..." + msisdn[len(msisdn)-3:]
+	 }
+	 return msisdn // Return as is if too short to mask meaningfully
+}
+
+// --- DrawService Interface Definition ---
+
+// DrawService defines the interface for draw operations
+type DrawService interface {
+	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error)
+	ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error)
+	GetPrizeStructure(ctx context.Context, drawType string) ([]models.Prize, error)
+	UpdatePrizeStructure(ctx context.Context, drawType string, prizes []models.Prize) error
+	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)
+	GetDrawByID(ctx context.Context, id primitive.ObjectID) (*models.Draw, error)
+	GetAllDraws(ctx context.Context) ([]*models.Draw, error)
+	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
+	GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error)
+	AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64, topupTime time.Time) error
+}
