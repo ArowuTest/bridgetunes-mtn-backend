@@ -111,12 +111,13 @@ func setDefaults() {
 	// Default only for local development, expect SERVER_ALLOWED_HOSTS env var in deployment
 	viper.SetDefault("Server.AllowedHosts", []string{"http://localhost:3000"}) 
 	viper.SetDefault("MongoDB.URI", "mongodb+srv://fsanus20111:wXVTvRfaCtcd5W7t@cluster0.llhkakp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
-	viper.SetDefault("MongoDB.Database", "bridgetunes-mtn")
+	viper.SetDefault("MongoDB.Database", "bridgetunes")
 	viper.SetDefault("JWT.ExpiresIn", 24*60*60) // 24 hours
 	viper.SetDefault("LogLevel", "info")
 	viper.SetDefault("MTN.MockAPI", true)
 	viper.SetDefault("SMS.DefaultGateway", "mtn")
 	viper.SetDefault("SMS.MockSMSGateway", true)
 }
+
 
 
