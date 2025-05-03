@@ -35,6 +35,12 @@ func main() {
 
 	// *** ADDED LOGGING HERE ***
 	log.Printf("[INFO] Effective MongoDB Database Name from Config: %s", cfg.MongoDB.Database)
+	// *** ADDED JWT SECRET DEBUG LOGGING ***
+	 if cfg.JWT.Secret != "" {
+	 	log.Printf("[DEBUG] JWT Secret loaded (first 5 chars): %s...", cfg.JWT.Secret[:5])
+	 } else {
+	 	log.Println("[ERROR] JWT Secret IS EMPTY after config load!")
+	 }
 
 	// Connect to MongoDB using the pkg helper
 	 mongoClient, err := mongodb.NewClient(cfg.MongoDB.URI)
@@ -163,6 +169,5 @@ func main() {
 
 	log.Println("Server exiting")
 }
-
 
 
