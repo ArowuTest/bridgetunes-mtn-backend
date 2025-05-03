@@ -17,7 +17,7 @@ import (
 // AuthService defines the interface for authentication operations
 type AuthService interface {
 	Register(ctx context.Context, req *models.RegisterRequest) (*models.AdminUser, error) // Return AdminUser
-	Login(ctx context.Context, req *models.LoginRequest) (string, error)                  // Returns JWT token
+	Login(ctx context.Context, req *models.LoginRequest) (string, *models.AdminUser, error) // Returns JWT token AND User
 }
 
 type authService struct {
@@ -85,7 +85,7 @@ func (s *authService) Register(ctx context.Context, req *models.RegisterRequest)
 }
 
 // Login handles admin user login
-func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (string, error) {
+func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (string, *models.AdminUser, error) {
 	log.Printf("[DEBUG] Login: Attempting login for email: %s", req.Email)
 
 	// Find admin user by email using AdminUserRepository
@@ -95,10 +95,10 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (stri
 	 switch {
 	 case err == mongo.ErrNoDocuments:
 	 	log.Printf("[DEBUG] Login: User not found for email: %s", req.Email)
-	 	return "", errors.New("invalid email or password") // Keep generic error for security
+	 	return "", nil, errors.New("invalid email or password") // Keep generic error for security
 	 case err != nil:
 	 	log.Printf("[ERROR] Login: Error finding user %s: %v", req.Email, err)
-	 	return "", fmt.Errorf("error finding admin user: %w", err)
+	 	return "", nil, fmt.Errorf("error finding admin user: %w", err)
 	 case err == nil:
 	 	log.Printf("[DEBUG] Login: User found for email: %s. User ID: %s", req.Email, adminUser.ID.Hex())
 	 	log.Printf("[DEBUG] Login: Stored hash for %s: %s", req.Email, adminUser.Password) // Log the stored hash
@@ -110,7 +110,7 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (stri
 	 if err != nil {
 	 	// Passwords don't match (or bcrypt error)
 	 	log.Printf("[DEBUG] Login: Password comparison failed for %s: %v", req.Email, err) // Log the specific bcrypt error
-	 	return "", errors.New("invalid email or password") // Keep generic error for security
+	 	return "", nil, errors.New("invalid email or password") // Keep generic error for security
 	 }
 
 	log.Printf("[DEBUG] Login: Password comparison successful for %s", req.Email)
@@ -130,11 +130,12 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (stri
 	tokenString, err := token.SignedString([]byte(s.jwtSecret))
 	 if err != nil {
 	 	log.Printf("[ERROR] Login: Failed to sign JWT token for %s: %v", req.Email, err)
-	 	return "", fmt.Errorf("failed to generate token: %w", err)
+	 	return "", nil, fmt.Errorf("failed to generate token: %w", err) // Return nil user on error
 	 }
 
 	log.Printf("[DEBUG] Login: JWT token generated successfully for %s", req.Email)
-	return tokenString, nil
+	adminUser.Password = "" // Clear password before returning user object
+	return tokenString, adminUser, nil // Return token AND user object
 }
 
 
