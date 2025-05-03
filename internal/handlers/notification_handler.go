@@ -181,19 +181,23 @@ func (h *NotificationHandler) ExecuteCampaign(c *gin.Context) {
 }
 
 // GetAllCampaigns handles GET /notifications/campaigns
+// Placeholder implementation
 func (h *NotificationHandler) GetAllCampaigns(c *gin.Context) {
-	// Parse pagination parameters
+	// TODO: Implement logic to fetch all campaigns, potentially with pagination
 	 page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	 limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-	// Get campaigns from service
-	 campaigns, err := h.notificationService.GetAllCampaigns(c, page, limit)
-	 if err != nil {
-		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get campaigns: " + err.Error() })
-		 return
+	 // Example placeholder response
+	 campaigns := []gin.H{
+		{"id": "campaign1", "name": "Welcome Campaign", "status": "active"},
+		{"id": "campaign2", "name": "Promo Campaign", "status": "inactive"},
 	}
-
-	 c.JSON(http.StatusOK, campaigns)
+	 c.JSON(http.StatusOK, gin.H{
+	 	"message": "GetAllCampaigns endpoint reached (placeholder)",
+	 	"page": page,
+	 	"limit": limit,
+	 	"campaigns": campaigns,
+	 })
 }
 
 // CreateTemplate handles POST /notifications/templates
@@ -316,6 +320,25 @@ func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 	 c.JSON(http.StatusOK, gin.H{"message": "Template deleted successfully"})
 }
 
+// GetAllTemplates handles GET /notifications/templates
+// Placeholder implementation
+func (h *NotificationHandler) GetAllTemplates(c *gin.Context) {
+	// TODO: Implement logic to fetch all templates, potentially with pagination
+	 page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	 limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	 // Example placeholder response
+	 templates := []gin.H{
+		{"id": "template1", "name": "Welcome SMS", "type": "SMS"},
+		{"id": "template2", "name": "Winner Notification", "type": "SMS"},
+	}
+	 c.JSON(http.StatusOK, gin.H{
+	 	"message": "GetAllTemplates endpoint reached (placeholder)",
+	 	"page": page,
+	 	"limit": limit,
+	 	"templates": templates,
+	 })
+}
 
 
 // GetNotifications handles GET /notifications
@@ -335,5 +358,6 @@ func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	 // c.JSON(http.StatusOK, notifications)
 	 c.JSON(http.StatusNotImplemented, gin.H{"message": "GetNotifications not implemented", "page": page, "limit": limit})
 }
+
 
 
