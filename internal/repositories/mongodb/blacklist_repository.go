@@ -7,9 +7,7 @@ import (
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // BlacklistRepository implements the repositories.BlacklistRepository interface
@@ -20,72 +18,52 @@ type BlacklistRepository struct {
 // NewBlacklistRepository creates a new BlacklistRepository
 func NewBlacklistRepository(db *mongo.Database) repositories.BlacklistRepository {
 	return &BlacklistRepository{
-		collection: db.Collection("blacklists"),
+		collection: db.Collection("blacklist"),
 	}
 }
 
-// FindByID finds a blacklist entry by ID
-func (r *BlacklistRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*models.Blacklist, error) {
-	var blacklist models.Blacklist
-	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&blacklist)
-	if err != nil {
-		return nil, err
+// IsBlacklisted checks if an MSISDN exists in the blacklist collection.
+func (r *BlacklistRepository) IsBlacklisted(ctx context.Context, msisdn string) (bool, error) {
+	filter := bson.M{"msisdn": msisdn}
+	count, err := r.collection.CountDocuments(ctx, filter)
+	 if err != nil {
+		 return false, err // Return error if query fails
 	}
-	return &blacklist, nil
+	 return count > 0, nil // Return true if count > 0, false otherwise
 }
 
-// FindByMSISDN finds a blacklist entry by MSISDN
-func (r *BlacklistRepository) FindByMSISDN(ctx context.Context, msisdn string) (*models.Blacklist, error) {
-	var blacklist models.Blacklist
-	err := r.collection.FindOne(ctx, bson.M{"msisdn": msisdn}).Decode(&blacklist)
-	if err != nil {
-		return nil, err
+// Add adds an MSISDN to the blacklist
+func (r *BlacklistRepository) Add(ctx context.Context, msisdn string, reason string) error {
+	entry := models.BlacklistEntry{
+		MSISDN:    msisdn,
+		Reason:    reason,
+		CreatedAt: time.Now(),
 	}
-	return &blacklist, nil
+	_, err := r.collection.InsertOne(ctx, entry)
+	 return err
 }
 
-// FindAll finds all blacklist entries with pagination
-func (r *BlacklistRepository) FindAll(ctx context.Context, page, limit int) ([]*models.Blacklist, error) {
-	opts := options.Find().
-		SetSkip(int64((page - 1) * limit)).
-		SetLimit(int64(limit)).
-		SetSort(bson.M{"blacklistedAt": -1}) // Sort by blacklisted date descending
+// Remove removes an MSISDN from the blacklist
+func (r *BlacklistRepository) Remove(ctx context.Context, msisdn string) error {
+	_, err := r.collection.DeleteOne(ctx, bson.M{"msisdn": msisdn})
+	 return err
+}
 
-	cursor, err := r.collection.Find(ctx, bson.M{}, opts)
-	if err != nil {
-		return nil, err
+// FindAll finds all blacklist entries (consider pagination for large lists)
+func (r *BlacklistRepository) FindAll(ctx context.Context) ([]*models.BlacklistEntry, error) {
+	cursor, err := r.collection.Find(ctx, bson.M{})
+	 if err != nil {
+		 return nil, err
 	}
-	defer cursor.Close(ctx)
+	 defer cursor.Close(ctx)
 
-	var blacklists []*models.Blacklist
-	if err := cursor.All(ctx, &blacklists); err != nil {
-		return nil, err
+	 var entries []*models.BlacklistEntry
+	 if err := cursor.All(ctx, &entries); err != nil {
+		 return nil, err
 	}
-	return blacklists, nil
+	 if entries == nil {
+		 entries = []*models.BlacklistEntry{}
+	 }
+	 return entries, nil
 }
 
-// Create creates a new blacklist entry
-func (r *BlacklistRepository) Create(ctx context.Context, blacklist *models.Blacklist) error {
-	blacklist.CreatedAt = time.Now()
-	blacklist.UpdatedAt = time.Now()
-	_, err := r.collection.InsertOne(ctx, blacklist)
-	return err
-}
-
-// Update updates a blacklist entry
-func (r *BlacklistRepository) Update(ctx context.Context, blacklist *models.Blacklist) error {
-	blacklist.UpdatedAt = time.Now()
-	_, err := r.collection.ReplaceOne(ctx, bson.M{"_id": blacklist.ID}, blacklist)
-	return err
-}
-
-// Delete deletes a blacklist entry
-func (r *BlacklistRepository) Delete(ctx context.Context, id primitive.ObjectID) error {
-	_, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
-	return err
-}
-
-// Count counts all blacklist entries
-func (r *BlacklistRepository) Count(ctx context.Context) (int64, error) {
-	return r.collection.CountDocuments(ctx, bson.M{})
-}
