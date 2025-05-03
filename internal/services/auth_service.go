@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log" // Import the log package
 	"time"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
-	"go.mongodb.org/mongo-driver/mongo" // Now used for error checking
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 	// TODO: Add JWT library import (e.g., "github.com/golang-jwt/jwt/v5")
 	// import "github.com/golang-jwt/jwt/v5"
@@ -36,27 +37,29 @@ func NewAuthService(adminUserRepo repositories.AdminUserRepository /*, jwtSecret
 
 // Register handles admin user registration
 func (s *authService) Register(ctx context.Context, req *models.RegisterRequest) (*models.AdminUser, error) {
+	log.Printf("[DEBUG] Register: Attempting to register user with email: %s", req.Email)
 	// Check if admin user already exists
 	_, err := s.adminUserRepo.FindByEmail(ctx, req.Email)
 
 	// Handle potential errors from FindByEmail
-	// Use a switch statement for clarity
 	 switch {
 	 case err == nil:
-	 	// User found, return error
+	 	log.Printf("[DEBUG] Register: User with email %s already exists.", req.Email)
 	 	return nil, errors.New("admin user with this email already exists")
 	 case err != mongo.ErrNoDocuments:
-	 	// An unexpected error occurred during the database query
+	 	log.Printf("[ERROR] Register: Error checking for existing user %s: %v", req.Email, err)
 	 	return nil, fmt.Errorf("error checking for existing admin user: %w", err)
-	 // case err == mongo.ErrNoDocuments:
-	 	// User not found, proceed with registration (do nothing here)
+	 case err == mongo.ErrNoDocuments:
+	 	log.Printf("[DEBUG] Register: User with email %s not found. Proceeding with registration.", req.Email)
 	 }
 
 	// Hash password
 	 hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	 if err != nil {
+	 	log.Printf("[ERROR] Register: Failed to hash password for %s: %v", req.Email, err)
 	 	return nil, fmt.Errorf("failed to hash password: %w", err)
 	 }
+	log.Printf("[DEBUG] Register: Password hashed successfully for %s.", req.Email)
 
 	adminUser := &models.AdminUser{
 		FirstName: req.FirstName,
@@ -71,8 +74,10 @@ func (s *authService) Register(ctx context.Context, req *models.RegisterRequest)
 	// Save admin user using AdminUserRepository
 	newAdminUser, err := s.adminUserRepo.Create(ctx, adminUser)
 	 if err != nil {
+	 	log.Printf("[ERROR] Register: Failed to create admin user %s: %v", req.Email, err)
 	 	return nil, fmt.Errorf("failed to create admin user: %w", err)
 	 }
+	log.Printf("[DEBUG] Register: Admin user %s created successfully with ID: %s", req.Email, newAdminUser.ID.Hex())
 
 	// Don't return password hash
 	newAdminUser.Password = ""
@@ -81,45 +86,42 @@ func (s *authService) Register(ctx context.Context, req *models.RegisterRequest)
 
 // Login handles admin user login
 func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (string, error) {
+	log.Printf("[DEBUG] Login: Attempting login for email: %s", req.Email)
+
 	// Find admin user by email using AdminUserRepository
 	adminUser, err := s.adminUserRepo.FindByEmail(ctx, req.Email)
-	
+
 	// Handle potential errors from FindByEmail
 	 switch {
 	 case err == mongo.ErrNoDocuments:
-	 	// User not found
-	 	return "", errors.New("invalid email or password")
+	 	log.Printf("[DEBUG] Login: User not found for email: %s", req.Email)
+	 	return "", errors.New("invalid email or password") // Keep generic error for security
 	 case err != nil:
-	 	// An unexpected error occurred during the database query
+	 	log.Printf("[ERROR] Login: Error finding user %s: %v", req.Email, err)
 	 	return "", fmt.Errorf("error finding admin user: %w", err)
-	 // case err == nil:
-	 	// User found, proceed with password check (do nothing here)
+	 case err == nil:
+	 	log.Printf("[DEBUG] Login: User found for email: %s. User ID: %s", req.Email, adminUser.ID.Hex())
+	 	log.Printf("[DEBUG] Login: Stored hash for %s: %s", req.Email, adminUser.Password) // Log the stored hash
 	 }
 
 	// Compare submitted password with the stored hash
+	log.Printf("[DEBUG] Login: Comparing provided password with stored hash for %s", req.Email)
 	 err = bcrypt.CompareHashAndPassword([]byte(adminUser.Password), []byte(req.Password))
 	 if err != nil {
 	 	// Passwords don't match (or bcrypt error)
-	 	return "", errors.New("invalid email or password")
+	 	log.Printf("[DEBUG] Login: Password comparison failed for %s: %v", req.Email, err) // Log the specific bcrypt error
+	 	return "", errors.New("invalid email or password") // Keep generic error for security
 	 }
+
+	log.Printf("[DEBUG] Login: Password comparison successful for %s", req.Email)
 
 	// Generate JWT token (Placeholder)
 	// TODO: Implement actual JWT generation using a library and secret key
-	// claims := jwt.MapClaims{
-	// 	 "sub": adminUser.ID.Hex(),
-	// 	 "email": adminUser.Email,
-	// 	 "role": adminUser.Role,
-	// 	 "exp": time.Now().Add(time.Hour * 72).Unix(), // Example expiration
-	// }
-	// token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	// tokenString, err := token.SignedString([]byte(s.jwtSecret))
-	// if err != nil {
-	// 	 return "", errors.New("failed to generate token")
-	// }
-	// return tokenString, nil
+	log.Printf("[DEBUG] Login: Generating dummy JWT token for %s", req.Email)
 
 	// Return a dummy token for now
 	return "dummy-jwt-token-replace-with-real-one", nil
 }
+
 
 
