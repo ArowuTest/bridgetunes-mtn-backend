@@ -105,10 +105,10 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 			 draws.POST("/schedule", deps.DrawHandler.ScheduleDraw)
 			 draws.POST("/execute/:id", deps.DrawHandler.ExecuteDraw)
 			 draws.GET("/winners/:id", deps.DrawHandler.GetWinners)
-			 draws.GET("/date/:date", deps.DrawHandler.GetDrawByDate) // The route causing 404 earlier
-			 draws.GET("/default-digits/:day", deps.DrawHandler.GetDefaultDigitsForDay) // The route causing 404 earlier
-			 draws.GET("/config", deps.DrawHandler.GetDrawConfig) // Assuming this handler exists
-			 draws.GET("/prize-structure", deps.DrawHandler.GetPrizeStructure) // Assuming this handler exists
+			 draws.GET("/date/:date", deps.DrawHandler.GetDrawByDate)
+			 draws.GET("/default-digits/:day", deps.DrawHandler.GetDefaultDigitsForDay)
+			 draws.GET("/config", deps.DrawHandler.GetDrawConfig)
+			 draws.GET("/prize-structure", deps.DrawHandler.GetPrizeStructure)
 			// Add other draw routes
 		}
 
@@ -121,8 +121,10 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 
 		 notifications := protected.Group("/notifications")
 		{
-			 notifications.GET("", deps.NotificationHandler.GetNotifications)
-			// Add other notification routes
+			 notifications.GET("", deps.NotificationHandler.GetNotifications) // General notifications endpoint
+			 notifications.GET("/campaigns", deps.NotificationHandler.GetAllCampaigns) // Add route for getting all campaigns
+			 notifications.GET("/templates", deps.NotificationHandler.GetAllTemplates) // Add route for getting all templates
+			 // Add other specific notification routes as needed (e.g., POST /campaigns, POST /templates, GET /campaigns/:id)
 		}
 
 		// Dashboard route
