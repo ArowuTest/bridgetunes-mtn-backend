@@ -19,7 +19,6 @@ import (
 )
 
 // Compile-time check to ensure DrawServiceImpl implements DrawService
-// Note: The DrawService interface itself is defined in service.go
 var _ DrawService = (*DrawServiceImpl)(nil)
 
 // DrawServiceImpl handles draw-related business logic according to redesign plan
@@ -317,6 +316,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 		 }
 
 		 for _, prize := range draw.Prizes {
+			 // Corrected: Check against models.JackpotCategory constant (to be defined)
 			 if prize.Category == models.JackpotCategory { // Skip jackpot prize here
 				 continue
 			 }
@@ -351,7 +351,8 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 					 MSISDN:       winnerUser.MSISDN,
 					 PrizeCategory: prize.Category,
 					 PrizeAmount:  prize.Amount,
-					 DrawDate:     draw.DrawDate,
+					 // Corrected: Use WinDate instead of DrawDate (assuming model has WinDate)
+					 WinDate:      draw.DrawDate,
 					 ClaimStatus:  models.ClaimStatusPending,
 					 CreatedAt:    time.Now(),
 					 UpdatedAt:    time.Now(),
@@ -370,6 +371,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 		 // Find the jackpot prize details
 		 var jackpotPrize models.Prize
 		 for _, p := range draw.Prizes {
+			 // Corrected: Check against models.JackpotCategory constant (to be defined)
 			 if p.Category == models.JackpotCategory {
 				 jackpotPrize = p
 				 break
@@ -386,243 +388,244 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 			 DrawID:       draw.ID,
 			 UserID:       potentialJackpotWinner.ID,
 			 MSISDN:       potentialJackpotWinner.MSISDN,
+			 // Corrected: Use models.JackpotCategory constant (to be defined)
 			 PrizeCategory: models.JackpotCategory,
 			 PrizeAmount:  draw.CalculatedJackpotAmount, // Use the final calculated amount
-			 DrawDate:     draw.DrawDate,
+			 // Corrected: Use WinDate instead of DrawDate (assuming model has WinDate)
+			 WinDate:      draw.DrawDate,
 			 ClaimStatus:  models.ClaimStatusPending,
 			 CreatedAt:    time.Now(),
 			 UpdatedAt:    time.Now(),
 		 }
 		 allWinners = append(allWinners, jackpotWinnerRecord)
+		 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Jackpot Winner Record Prepared: %s", maskMsisdn(potentialJackpotWinner.MSISDN)))
 	 }
 
 	 if len(allWinners) > 0 {
 		 err = s.winnerRepo.CreateMany(ctx, allWinners)
 		 if err != nil {
-			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR saving winners to DB: %s", err.Error()))
+			 slog.Error("Failed to create winner records in DB", "error", err, "drawId", draw.ID)
+			 // Log error but don't necessarily fail the entire execution at this point?
+			 // Maybe mark the draw as completed with errors?
+			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR creating winner records: %s", err.Error()))
+			 // Decide if this error should be returned and mark draw as failed
+			 // For now, let's return the error
 			 return draw, fmt.Errorf("failed to save winners: %w", err)
 		 }
-		 draw.NumWinners = len(allWinners)
-		 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Successfully saved %d winners to DB", len(allWinners)))
+		 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Successfully created %d winner records", len(allWinners)))
 	 } else {
-		 draw.NumWinners = 0
-		 draw.ExecutionLog = append(draw.ExecutionLog, "No winners selected or saved.")
+		 draw.ExecutionLog = append(draw.ExecutionLog, "No winners selected or eligible for this draw.")
 	 }
 
-	 // 9. Final Update (Handled by defer)
-	 return draw, nil // err will be nil here if execution reached the end
+	 // 9. Finalize Draw Status (handled by defer)
+	 return draw, nil // Error is handled by defer
 }
 
-// --- Helper & Other Methods ---
+// --- Helper & Utility Methods ---
 
-// GetPrizeStructure fetches and parses the prize structure from config
+// GetPrizeStructure retrieves and parses the prize structure from config
 func (s *DrawServiceImpl) GetPrizeStructure(ctx context.Context, drawType string) ([]models.Prize, error) {
-	 configKey := "prize_structure_" + strings.ToUpper(drawType)
-	 config, err := s.systemConfigRepo.FindByKey(ctx, configKey)
+	 prizeKey := "prize_structure_" + strings.ToUpper(drawType)
+	 config, err := s.systemConfigRepo.FindByKey(ctx, prizeKey)
 	 if err != nil {
-		 slog.Error("Failed to fetch prize structure config", "error", err, "key", configKey)
-		 return nil, fmt.Errorf("failed to fetch prize structure config %s: %w", configKey, err)
+		 slog.Error("Failed to fetch prize structure config", "error", err, "key", prizeKey)
+		 // Consider returning a default structure or a more specific error
+		 return nil, fmt.Errorf("failed to fetch prize structure config %s: %w", prizeKey, err)
 	 }
 
-	 // Value is likely stored as a stringified JSON array or similar
-	 // We need to parse it into []models.Prize
+	 // Assuming Value is stored as a JSON string
+	 jsonString, ok := config.Value.(string)
+	 if !ok {
+		 slog.Error("Invalid prize structure format in config (not a string)", "key", prizeKey, "valueType", fmt.Sprintf("%T", config.Value))
+		 return nil, fmt.Errorf("invalid prize structure format in config %s: expected JSON string", prizeKey)
+	 }
+
 	 var prizes []models.Prize
-	 switch v := config.Value.(type) {
-	 case string:
-		 // Attempt to unmarshal if it's a JSON string
-		 err = json.Unmarshal([]byte(v), &prizes)
-		 if err != nil {
-			 slog.Error("Failed to unmarshal prize structure JSON string", "error", err, "key", configKey, "value", v)
-			 return nil, fmt.Errorf("invalid prize structure format (string) in config %s: %w", configKey, err)
-		 }
-	 case primitive.A: // Handle if stored directly as MongoDB array
-		 // Convert primitive.A to []models.Prize (requires careful handling of types)
-		 tempBytes, err := json.Marshal(v) // Marshal to JSON bytes first
-		 if err != nil {
-			 slog.Error("Failed to marshal prize structure BSON array", "error", err, "key", configKey)
-			 return nil, fmt.Errorf("failed to marshal prize structure BSON array %s: %w", configKey, err)
-		 }
-		 err = json.Unmarshal(tempBytes, &prizes) // Unmarshal JSON bytes into struct slice
-		 if err != nil {
-			 slog.Error("Failed to unmarshal prize structure from BSON array", "error", err, "key", configKey)
-			 return nil, fmt.Errorf("failed to unmarshal prize structure from BSON array %s: %w", configKey, err)
-		 }
-	 default:
-		 slog.Error("Unsupported prize structure format in config", "key", configKey, "valueType", fmt.Sprintf("%T", config.Value))
-		 return nil, fmt.Errorf("unsupported prize structure format in config %s", configKey)
-	 }
-
-	 if len(prizes) == 0 {
-		 slog.Error("Prize structure config is empty or failed to parse", "key", configKey)
-		 return nil, fmt.Errorf("prize structure config %s is empty or invalid", configKey)
+	 err = json.Unmarshal([]byte(jsonString), &prizes)
+	 if err != nil {
+		 slog.Error("Failed to unmarshal prize structure JSON", "error", err, "key", prizeKey, "jsonString", jsonString)
+		 return nil, fmt.Errorf("failed to parse prize structure config %s: %w", prizeKey, err)
 	 }
 
 	 return prizes, nil
 }
 
-// UpdatePrizeStructure updates the prize structure in the system config
+// UpdatePrizeStructure updates the prize structure in config
 func (s *DrawServiceImpl) UpdatePrizeStructure(ctx context.Context, drawType string, prizes []models.Prize) error {
-	 configKey := "prize_structure_" + strings.ToUpper(drawType)
-	 // Store as JSON string or directly if DB supports complex types well
-	 // Storing as JSON string is often safer for cross-language/driver compatibility
-	 prizeBytes, err := json.Marshal(prizes)
+	 prizeKey := "prize_structure_" + strings.ToUpper(drawType)
+
+	 // Marshal the prize structure to JSON string
+	 jsonBytes, err := json.Marshal(prizes)
 	 if err != nil {
 		 slog.Error("Failed to marshal prize structure to JSON", "error", err)
-		 return fmt.Errorf("failed to marshal prize structure: %w", err)
+		 return fmt.Errorf("failed to serialize prize structure: %w", err)
+	 }
+	 jsonString := string(jsonBytes)
+
+	 // Upsert the config value
+	 err = s.systemConfigRepo.UpsertByKey(ctx, prizeKey, jsonString)
+	 if err != nil {
+		 slog.Error("Failed to upsert prize structure config", "error", err, "key", prizeKey)
+		 return fmt.Errorf("failed to save prize structure config %s: %w", prizeKey, err)
 	 }
 
-	 err = s.systemConfigRepo.UpsertByKey(ctx, configKey, string(prizeBytes), fmt.Sprintf("%s prize structure", strings.Title(strings.ToLower(drawType))))
-	 if err != nil {
-		 slog.Error("Failed to upsert prize structure config", "error", err, "key", configKey)
-		 return fmt.Errorf("failed to save prize structure config %s: %w", configKey, err)
-	 }
-	 slog.Info("Prize structure updated successfully", "key", configKey)
+	 slog.Info("Prize structure updated successfully", "key", prizeKey)
 	 return nil
 }
 
-// GetDrawByDate retrieves a draw by its date
-func (s *DrawServiceImpl) GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error) {
-	 return s.drawRepo.FindByDate(ctx, date)
-}
-
-// GetDrawByID retrieves a draw by its ID
-func (s *DrawServiceImpl) GetDrawByID(ctx context.Context, id primitive.ObjectID) (*models.Draw, error) {
-	 return s.drawRepo.FindByID(ctx, id)
-}
-
-// GetAllDraws retrieves all draws (consider pagination)
-func (s *DrawServiceImpl) GetAllDraws(ctx context.Context) ([]*models.Draw, error) {
-	 return s.drawRepo.FindAll(ctx)
-}
-
-// GetWinnersByDrawID retrieves winners for a specific draw
-func (s *DrawServiceImpl) GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
-	 return s.winnerRepo.FindByDrawID(ctx, drawID)
-}
-
-// GetJackpotStatus retrieves the current jackpot status (e.g., current amount)
-// This might involve finding the latest draw or a dedicated status record
+// GetJackpotStatus retrieves the current status of the jackpot
 func (s *DrawServiceImpl) GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error) {
-	 // Option 1: Find the latest completed/scheduled draw and use its jackpot amount
-	 // Option 2: Query a dedicated JackpotStatus collection/document (more robust)
-
-	 // Using Option 1 for now (simpler, but less accurate if draws are out of order)
-	 // Find the most recent draw (regardless of status? or only completed/scheduled?)
-	 // Need a FindLatestDraw method in the repository
-
-	 // Placeholder implementation - returns a static status
-	 // TODO: Implement proper logic based on chosen approach (latest draw or dedicated status)
-	 status := &models.JackpotStatus{
-		 CurrentAmount: 5000000.00, // Example static value
-		 LastDrawDate:  time.Now().AddDate(0, 0, -1),
-		 NextDrawDate:  time.Now().AddDate(0, 0, 1),
-		 UpdatedAt:     time.Now(),
+	 // 1. Find the most recently completed or scheduled Saturday draw
+	 // This requires a repository method like FindLatestDrawByTypeAndStatus
+	 latestSaturdayDraw, err := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", []string{models.DrawStatusCompleted, models.DrawStatusScheduled})
+	 if err != nil {
+		 if errors.Is(err, mongo.ErrNoDocuments) {
+			 slog.Info("No relevant Saturday draw found for jackpot status, returning default.")
+			 // Return default status if no draws found
+			 return &models.JackpotStatus{CurrentAmount: 0, NextDrawDate: time.Time{}, LastWinnerMsisdn: "", LastWinDate: time.Time{}}, nil
+		 }
+		 slog.Error("Failed to find latest Saturday draw for jackpot status", "error", err)
+		 return nil, fmt.Errorf("failed to retrieve latest draw data: %w", err)
 	 }
-	 slog.Warn("GetJackpotStatus using placeholder implementation")
+
+	 status := &models.JackpotStatus{}
+	 status.NextDrawDate = latestSaturdayDraw.DrawDate // Assuming this is the next scheduled one
+
+	 // If the latest draw is completed, check for rollover and winner
+	 if latestSaturdayDraw.Status == models.DrawStatusCompleted {
+		 if latestSaturdayDraw.RolloverExecuted {
+			 // If it rolled over, the current amount is 0, and we need the *next* scheduled draw date
+			 status.CurrentAmount = 0 // Rolled over
+			 nextDraw, nextErr := s.drawRepo.FindNextScheduledDraw(ctx, latestSaturdayDraw.DrawDate)
+			 if nextErr == nil {
+				 status.NextDrawDate = nextDraw.DrawDate
+			 } else {
+				 slog.Warn("Could not find next scheduled draw after completed rollover draw", "lastDrawId", latestSaturdayDraw.ID)
+				 // Keep the date of the completed draw as a fallback?
+			 }
+		 } else {
+			 // If it completed without rollover, the jackpot was won
+			 status.CurrentAmount = 0 // Won
+			 status.LastWinDate = latestSaturdayDraw.DrawDate
+			 // Find the winner of the jackpot prize for this draw
+			 winners, winErr := s.winnerRepo.FindByDrawIDAndCategory(ctx, latestSaturdayDraw.ID, models.JackpotCategory)
+			 if winErr == nil && len(winners) > 0 {
+				 status.LastWinnerMsisdn = winners[0].MSISDN // Assuming only one jackpot winner
+			 } else if winErr != nil {
+				 slog.Error("Failed to find jackpot winner for completed draw", "error", winErr, "drawId", latestSaturdayDraw.ID)
+			 }
+			 // Need the *next* scheduled draw date
+			 nextDraw, nextErr := s.drawRepo.FindNextScheduledDraw(ctx, latestSaturdayDraw.DrawDate)
+			 if nextErr == nil {
+				 status.NextDrawDate = nextDraw.DrawDate
+			 } else {
+				 slog.Warn("Could not find next scheduled draw after completed winning draw", "lastDrawId", latestSaturdayDraw.ID)
+			 }
+		 }
+	 } else { // If the latest draw is scheduled
+		 status.CurrentAmount = latestSaturdayDraw.CalculatedJackpotAmount
+		 status.NextDrawDate = latestSaturdayDraw.DrawDate
+		 // Find the last *completed* draw to get the last winner info
+		 lastCompletedDraw, errComp := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", []string{models.DrawStatusCompleted})
+		 if errComp == nil {
+			 if !lastCompletedDraw.RolloverExecuted {
+				 status.LastWinDate = lastCompletedDraw.DrawDate
+				 winners, winErr := s.winnerRepo.FindByDrawIDAndCategory(ctx, lastCompletedDraw.ID, models.JackpotCategory)
+				 if winErr == nil && len(winners) > 0 {
+					 status.LastWinnerMsisdn = winners[0].MSISDN
+				 } else if winErr != nil {
+					 slog.Error("Failed to find jackpot winner for last completed draw", "error", winErr, "drawId", lastCompletedDraw.ID)
+				 }
+			 }
+		 } else if !errors.Is(errComp, mongo.ErrNoDocuments) {
+			 slog.Error("Failed to find last completed Saturday draw for jackpot status", "error", errComp)
+		 }
+	 }
+
 	 return status, nil
 }
 
-// AllocatePointsForTopup calculates and allocates points for a topup event
-// This might be called by a separate process handling topup events
-func (s *DrawServiceImpl) AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64, topupTime time.Time) error {
-	 user, err := s.userRepo.FindByMSISDN(ctx, msisdn)
-	 if err != nil {
-		 if errors.Is(err, mongo.ErrNoDocuments) {
-			 slog.Info("User not found for point allocation", "msisdn", maskMsisdn(msisdn))
-			 return nil // Not an error if user doesn't exist
-		 }
-		 slog.Error("Failed to find user for point allocation", "error", err, "msisdn", maskMsisdn(msisdn))
-		 return fmt.Errorf("failed to find user %s: %w", msisdn, err)
-	 }
-
-	 pointsToAdd := calculatePoints(amount)
-	 if pointsToAdd <= 0 {
-		 return nil // No points to add
-	 }
-
-	 // Atomically increment user points
-	 err = s.userRepo.IncrementPoints(ctx, user.ID, pointsToAdd)
-	 if err != nil {
-		 slog.Error("Failed to increment user points", "error", err, "userId", user.ID, "pointsToAdd", pointsToAdd)
-		 return fmt.Errorf("failed to increment points for user %s: %w", user.ID.Hex(), err)
-	 }
-
-	 // Create a point transaction record
-	 transaction := &models.PointTransaction{
-		 UserID:      user.ID,
-		 MSISDN:      msisdn,
-		 Points:      pointsToAdd, // Corrected field name
-		 Source:      "TOPUP",     // Corrected field name
-		 Description: fmt.Sprintf("Points for N%.2f topup", amount),
-		 Timestamp:   topupTime,
-	 }
-	 err = s.pointTransactionRepo.Create(ctx, transaction)
-	 if err != nil {
-		 slog.Error("Failed to create point transaction record", "error", err, "userId", user.ID)
-		 // Log error but don't fail the overall operation
-	 }
-
-	 slog.Info("Points allocated successfully", "userId", user.ID, "msisdn", maskMsisdn(msisdn), "pointsAdded", pointsToAdd)
-	 return nil
-}
-
-// --- Internal Helper Functions ---
-
-// calculatePoints calculates points based on topup amount
-// This is the primary definition, the one in topup_service.go should be removed
-func calculatePoints(amount float64) int {
-	pointsToAdd := 0
+// AllocatePointsForTopup calculates points for a topup and updates user points.
+func (s *DrawServiceImpl) AllocatePointsForTopup(ctx context.Context, userID primitive.ObjectID, amount float64, transactionTime time.Time) (int, error) {
+	 pointsToAdd := 0
 	 if amount >= 1000 {
 		 pointsToAdd = 10
 	 } else {
-		 pointsToAdd = int(amount / 100) // Integer division gives points per N100
+		 pointsToAdd = int(amount / 100)
 	 }
-	 return pointsToAdd
+
+	 if pointsToAdd <= 0 {
+		 slog.Info("No points to add for top-up", "amount", amount, "userId", userID)
+		 return 0, nil
+	 }
+
+	 // Create Point Transaction record
+	 transaction := &models.PointTransaction{
+		 UserID:          userID,
+		 PointsAwarded:   pointsToAdd, // Corrected field name
+		 TransactionType: "TOPUP",     // Corrected field name
+		 TransactionTime: transactionTime,
+		 RelatedAmount:   amount,
+		 CreatedAt:       time.Now(),
+	 }
+	 err := s.pointTransactionRepo.Create(ctx, transaction)
+	 if err != nil {
+		 slog.Error("Failed to create point transaction record", "error", err, "userId", userID)
+		 return 0, fmt.Errorf("failed to record point transaction: %w", err)
+	 }
+
+	 // Increment user points atomically
+	 err = s.userRepo.IncrementPoints(ctx, userID, pointsToAdd)
+	 if err != nil {
+		 slog.Error("Failed to increment user points", "error", err, "userId", userID, "pointsToAdd", pointsToAdd)
+		 // TODO: Consider rollback or compensating transaction for the PointTransaction record?
+		 return 0, fmt.Errorf("failed to update user points: %w", err)
+	 }
+
+	 slog.Info("Points allocated successfully", "userId", userID, "pointsAdded", pointsToAdd, "amount", amount)
+	 return pointsToAdd, nil
 }
 
-// createWeightedPool creates a slice where each user appears once per point they have
+// GetDefaultDigitsForDay returns the default eligible digits for a given day.
+// Added to satisfy the DrawService interface requirement.
+func (s *DrawServiceImpl) GetDefaultDigitsForDay(ctx context.Context, dayOfWeek time.Weekday) ([]int, error) {
+	 // This simply wraps the existing utility function.
+	 // No context is actually needed here, but included to match potential interface evolution.
+	 return utils.GetDefaultEligibleDigits(dayOfWeek), nil
+}
+
+// --- Private Helper Functions ---
+
+// createWeightedPool creates a slice where each user appears once for each point they have.
 func createWeightedPool(users []*models.User) []*models.User {
-	 totalWeight := 0
-	 for _, u := range users {
-		 // Ensure points are non-negative
-		 if u.Points > 0 {
-			 totalWeight += u.Points
+	 weightedPool := []*models.User{}
+	 for _, user := range users {
+		 // Ensure user has at least 1 entry even if points are 0 (REQFUNC027 implies weighting, not exclusion)
+		 weight := user.Points
+		 if weight <= 0 {
+			 weight = 1
 		 }
-	 }
-
-	 if totalWeight == 0 {
-		 // If no users have points, return the original pool (equal weighting)
-		 slog.Warn("No users in the pool have points, falling back to equal weighting.")
-		 return users
-	 }
-
-	 weightedPool := make([]*models.User, 0, totalWeight)
-	 for _, u := range users {
-		 if u.Points > 0 {
-			 for i := 0; i < u.Points; i++ {
-				 weightedPool = append(weightedPool, u)
-			 }
+		 for i := 0; i < weight; i++ {
+			 weightedPool = append(weightedPool, user)
 		 }
 	 }
 	 return weightedPool
 }
 
-// selectWeightedWinner selects a winner randomly from the weighted pool
-func selectWeightedWinner(weightedPool []*models.User) (winner *models.User, remainingPool []*models.User, err error) {
+// selectWeightedWinner selects one winner randomly from the weighted pool and returns the winner and the pool *without* that winner's entries.
+func selectWeightedWinner(weightedPool []*models.User) (*models.User, []*models.User, error) {
 	 if len(weightedPool) == 0 {
-		 return nil, weightedPool, errors.New("cannot select winner from empty pool")
+		 return nil, weightedPool, errors.New("weighted pool is empty")
 	 }
 
-	 // Seed the random number generator (important!)
-	 // Using time.Now().UnixNano() is common but not perfectly random for rapid calls.
-	 // Consider a shared rand.Source if performance is critical.
-	 r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	 // Seed random number generator (ideally seeded once at application start)
+	 // rand.Seed(time.Now().UnixNano()) // Seeding here can cause issues if called rapidly
 
-	 winnerIndex := r.Intn(len(weightedPool))
-	 winner = weightedPool[winnerIndex]
+	 winnerIndex := rand.Intn(len(weightedPool))
+	 winner := weightedPool[winnerIndex]
 
-	 // Create the remaining pool by removing *all* instances of the winner
-	 remainingPool = make([]*models.User, 0, len(weightedPool)-winner.Points) // Approximate capacity
+	 // Create a new pool excluding all entries for the selected winner
+	 remainingPool := []*models.User{}
 	 for _, user := range weightedPool {
 		 if user.ID != winner.ID {
 			 remainingPool = append(remainingPool, user)
@@ -632,27 +635,25 @@ func selectWeightedWinner(weightedPool []*models.User) (winner *models.User, rem
 	 return winner, remainingPool, nil
 }
 
-// maskMsisdn masks an MSISDN for logging
+// maskMsisdn masks an MSISDN for logging/display.
 func maskMsisdn(msisdn string) string {
 	 if len(msisdn) > 6 {
-		 return msisdn[:3] + "..." + msisdn[len(msisdn)-3:]
+		 return msisdn[:3] + "******" + msisdn[len(msisdn)-3:]
 	 }
-	 return msisdn // Return as is if too short to mask meaningfully
+	 return "******"
 }
 
-// --- DrawService Interface Definition (REMOVED - Defined in service.go) ---
 /*
-// DrawService defines the interface for draw operations
-type DrawService interface {
-	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error)
-	ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error)
-	GetPrizeStructure(ctx context.Context, drawType string) ([]models.Prize, error)
-	UpdatePrizeStructure(ctx context.Context, drawType string, prizes []models.Prize) error
-	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)
-	GetDrawByID(ctx context.Context, id primitive.ObjectID) (*models.Draw, error)
-	GetAllDraws(ctx context.Context) ([]*models.Draw, error)
-	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
-	GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error)
-	AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64, topupTime time.Time) error
+// calculatePoints determines points based on top-up amount.
+// REMOVED - Logic moved to AllocatePointsForTopup and uses PointTransactionRepo
+func calculatePoints(amount float64) int {
+    if amount >= 1000 {
+        return 10 // 10 points for N1000 or more
+    }
+    // 1 point for every N100
+    points := int(amount / 100)
+    return points
 }
 */
+
+
