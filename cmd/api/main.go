@@ -33,6 +33,9 @@ func main() {
 	 	log.Fatalf("Failed to load configuration: %v", err)
 	 }
 
+	// *** ADDED LOGGING HERE ***
+	log.Printf("[INFO] Effective MongoDB Database Name from Config: %s", cfg.MongoDB.Database)
+
 	// Connect to MongoDB using the pkg helper
 	 mongoClient, err := mongodb.NewClient(cfg.MongoDB.URI)
 	 if err != nil {
@@ -160,5 +163,7 @@ func main() {
 
 	log.Println("Server exiting")
 }
+
+
 
 
