@@ -120,4 +120,3 @@ func (r *SystemConfigRepository) Count(ctx context.Context) (int64, error) {
 	 return r.collection.CountDocuments(ctx, bson.M{})
 }
 
-
