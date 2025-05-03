@@ -69,8 +69,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	 	return
 	 }
 
-	// Call the Login method on the authService
-	token, err := h.authService.Login(c.Request.Context(), &req)
+	// Call the Login method on the authService, now expecting token and user
+	token, user, err := h.authService.Login(c.Request.Context(), &req)
 	// Check for errors (e.g., invalid credentials)
 	 if err != nil {
 	 	// Return an unauthorized error
@@ -80,8 +80,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	 	return
 	 }
 
-	// Return the JWT token with status 200 OK
-	 c.JSON(http.StatusOK, gin.H{"token": token})
+	// Return the JWT token AND user object with status 200 OK
+	 c.JSON(http.StatusOK, gin.H{"token": token, "user": user}) // Return token AND user object
 }
+
 
 
