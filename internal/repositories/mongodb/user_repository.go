@@ -2,8 +2,9 @@ package mongodb
 
 import (
 	"context"
-	"errors" // Added missing import
-	"strings" // Added missing import
+	"errors"
+	"fmt"     // Added missing import
+	"strings"
 	"time"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
@@ -11,7 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	// "go.mongodb.org/mongo-driver/mongo/options" // Removed unused import
 )
 
 // Compile-time check to ensure UserRepository implements the interface
@@ -111,7 +112,7 @@ func (r *UserRepository) FindByEligibleDigitsAndOptIn(ctx context.Context, digit
 	// Build the regex pattern for ending digits
 	var regexPatterns []string
 	for _, digit := range digits {
-		regexPatterns = append(regexPatterns, fmt.Sprintf("%d$", digit))
+		regexPatterns = append(regexPatterns, fmt.Sprintf("%d$", digit)) // Use fmt
 	}
 	regex := strings.Join(regexPatterns, "|")
 
@@ -152,7 +153,7 @@ func (r *UserRepository) FindEligibleConsolationUsers(ctx context.Context, digit
 	// Build the regex pattern for ending digits
 	var regexPatterns []string
 	for _, digit := range digits {
-		regexPatterns = append(regexPatterns, fmt.Sprintf("%d$", digit))
+		regexPatterns = append(regexPatterns, fmt.Sprintf("%d$", digit)) // Use fmt
 	}
 	regex := strings.Join(regexPatterns, "|")
 
@@ -197,4 +198,5 @@ func (r *UserRepository) IncrementPoints(ctx context.Context, userID primitive.O
 	 }
 	 return nil
 }
+
 
