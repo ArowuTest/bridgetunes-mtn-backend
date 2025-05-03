@@ -269,5 +269,18 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 	// c.JSON(http.StatusOK, user)
 }
 
+// GetDashboardStats handles GET /dashboard/stats
+// Placeholder implementation
+func (h *UserHandler) GetDashboardStats(c *gin.Context) {
+	// TODO: Implement actual logic to fetch dashboard statistics
+	// This might involve calling methods on userService or other services/repositories.
+	 c.JSON(http.StatusOK, gin.H{
+	 	"message": "Dashboard stats endpoint reached (placeholder)",
+	 	"total_users": 1234, // Example data
+	 	"total_draws": 56,   // Example data
+	 	"total_topups": 7890, // Example data
+	 })
+}
+
 
 
