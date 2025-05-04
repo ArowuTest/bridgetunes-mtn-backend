@@ -33,18 +33,15 @@ func (s *LegacyUserService) GetUserByMSISDN(ctx context.Context, msisdn string) 
 
 // GetAllUsers retrieves all users with pagination
 func (s *LegacyUserService) GetAllUsers(ctx context.Context, page, limit int) ([]*models.User, error) {
-	return s.userRepo.FindAll(ctx, page, limit)
-}
+	return s.userRepo.FindAll(ctx)}
 
 // GetUsersByOptInStatus retrieves users by opt-in status with pagination
 func (s *LegacyUserService) GetUsersByOptInStatus(ctx context.Context, optInStatus bool, page, limit int) ([]*models.User, error) {
-	return s.userRepo.FindByOptInStatus(ctx, optInStatus, page, limit)
-}
+	return s.userRepo.FindByOptInStatus(ctx, optInStatus)}
 
 // GetUsersByEligibleDigits retrieves users by eligible digits (last digits of MSISDN)
 func (s *LegacyUserService) GetUsersByEligibleDigits(ctx context.Context, digits []int, optInStatus bool) ([]*models.User, error) {
-	return s.userRepo.FindByEligibleDigits(ctx, digits, optInStatus)
-}
+	return s.userRepo.FindByEligibleDigits(ctx, digits)}
 
 // CreateUser creates a new user
 func (s *LegacyUserService) CreateUser(ctx context.Context, user *models.User) error {
@@ -118,6 +115,5 @@ func (s *LegacyUserService) AddPoints(ctx context.Context, msisdn string, points
 func (s *LegacyUserService) GetUserCount(ctx context.Context) (int64, error) {
 	return s.userRepo.Count(ctx)
 }
-
 
 
