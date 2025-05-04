@@ -89,9 +89,11 @@ func main() {
 	// Note: Ensure the service instances are stored with the correct type for dependency injection
 	 authService := services.NewAuthService(adminUserRepo, cfg.JWT.Secret, cfg.JWT.ExpiresIn) // Pass JWT secret and expiration
 	 legacyUserService := services.NewLegacyUserService(userRepo)
-	 // Pass blacklistRepo and systemConfigRepo to LegacyDrawService
-	 legacyDrawService := services.NewLegacyDrawService(drawRepo, userRepo, winnerRepo, blacklistRepo, systemConfigRepo)
-	 legacyTopupService := services.NewLegacyTopupService(topupRepo, legacyUserService, mtnClient)
+	 // Pass blacklistRepo and systemConfigRepo to NewDrawService
+	 // Use correct constructor name: NewDrawService instead of NewLegacyDrawService
+	 drawServiceInstance := services.NewDrawService(drawRepo, userRepo, winnerRepo, blacklistRepo, systemConfigRepo, pointTransactionRepo, jackpotRolloverRepo) // Added missing pointTransactionRepo, jackpotRolloverRepo
+	 // Use correct constructor name: NewTopupService instead of NewLegacyTopupService
+	 topupServiceInstance := services.NewTopupService(topupRepo, drawServiceInstance, mtnClient) // Pass drawServiceInstance
 	 legacyNotificationService := services.NewLegacyNotificationService(
 	 	notificationRepo,
 	 	 templateRepo,
@@ -104,8 +106,8 @@ func main() {
 	 
 	 // Store services using interface types if handlers expect interfaces (recommended)
 	 var userService services.UserService = legacyUserService
-	 var drawService services.DrawService = legacyDrawService
-	 var topupService services.TopupService = legacyTopupService
+	 var drawService services.DrawService = drawServiceInstance // Use the new instance
+	 var topupService services.TopupService = topupServiceInstance // Use the new instance
 	 var notificationService services.NotificationService = legacyNotificationService
 	 
 	// Initialize Handlers (Assuming handlers accept interface types)
