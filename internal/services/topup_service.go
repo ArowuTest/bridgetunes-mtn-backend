@@ -2,121 +2,74 @@ package services
 
 import (
 	"context"
-	"math" // Import math package for Floor
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
-	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/mtnapi"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/exp/slog"
 )
 
-// Compile-time check to ensure LegacyTopupService implements TopupService
-var _ TopupService = (*LegacyTopupService)(nil)
+// Compile-time check to ensure TopupServiceImpl implements TopupService
+// Note: The TopupService interface itself is defined in service.go
+var _ TopupService = (*TopupServiceImpl)(nil)
 
-// LegacyTopupService handles topup-related business logic
-type LegacyTopupService struct {
-	 topupRepo repositories.TopupRepository
-	 userService UserService // Use interface type for dependency
-	 mtnClient *mtnapi.Client
+type TopupServiceImpl struct {
+	userRepo             repositories.UserRepository
+	pointTransactionRepo repositories.PointTransactionRepository
+	drawService          DrawService // Inject DrawService for point allocation
 }
 
-// NewLegacyTopupService creates a new LegacyTopupService
-func NewLegacyTopupService(topupRepo repositories.TopupRepository, userService UserService, mtnClient *mtnapi.Client) *LegacyTopupService {
-	return &LegacyTopupService{
-		 topupRepo: topupRepo,
-		 userService: userService,
-		 mtnClient: mtnClient,
+func NewTopupService(userRepo repositories.UserRepository, pointTransactionRepo repositories.PointTransactionRepository, drawService DrawService) *TopupServiceImpl {
+	return &TopupServiceImpl{
+		userRepo:             userRepo,
+		pointTransactionRepo: pointTransactionRepo,
+		drawService:          drawService,
 	}
 }
 
-// GetTopupByID retrieves a topup by ID
-func (s *LegacyTopupService) GetTopupByID(ctx context.Context, id primitive.ObjectID) (*models.Topup, error) {
-	return s.topupRepo.FindByID(ctx, id)
+// ProcessTopup processes a top-up event, finds the user, and allocates points.
+func (s *TopupServiceImpl) ProcessTopup(ctx context.Context, msisdn string, amount float64, transactionTime time.Time) error {
+	slog.Info("Processing top-up", "msisdn", msisdn, "amount", amount, "time", transactionTime)
+
+	// 1. Find the user by MSISDN
+	user, err := s.userRepo.FindByMSISDN(ctx, msisdn)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			slog.Warn("User not found for top-up", "msisdn", msisdn)
+			// Depending on requirements, we might create the user here or just ignore the top-up
+			return fmt.Errorf("user with MSISDN %s not found", msisdn)
+		}
+		slog.Error("Failed to find user by MSISDN", "error", err, "msisdn", msisdn)
+		return fmt.Errorf("failed to retrieve user: %w", err)
+	}
+
+	// 2. Allocate points using the DrawService's method
+	// The DrawService now contains the canonical point calculation logic
+	pointsToAdd, err := s.drawService.AllocatePointsForTopup(ctx, user.ID, amount, transactionTime)
+	if err != nil {
+		// Error is already logged within AllocatePointsForTopup
+		return fmt.Errorf("failed to allocate points for top-up: %w", err)
+	}
+
+	slog.Info("Top-up processed successfully", "msisdn", msisdn, "amount", amount, "pointsAdded", pointsToAdd, "userId", user.ID)
+	return nil
 }
 
-// GetTopupsByMSISDN retrieves topups by MSISDN with pagination
-func (s *LegacyTopupService) GetTopupsByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Topup, error) {
-	return s.topupRepo.FindByMSISDN(ctx, msisdn, page, limit)
-}
-
-// GetTopupsByDateRange retrieves topups by date range with pagination
-func (s *LegacyTopupService) GetTopupsByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Topup, error) {
-	return s.topupRepo.FindByDateRange(ctx, start, end, page, limit)
-}
-
-// CreateTopup creates a new topup
-func (s *LegacyTopupService) CreateTopup(ctx context.Context, topup *models.Topup) error {
-	// Calculate points based on topup amount (proportional logic)
-	points := calculatePoints(topup.Amount)
-	 topup.PointsEarned = points
-
-	// Create the topup record
-	 err := s.topupRepo.Create(ctx, topup)
-	 if err != nil {
-		 return err
-	 }
-
-	// Add points to the user
-	 return s.userService.AddPoints(ctx, topup.MSISDN, points)
-}
-
-// ProcessTopups processes topups from the MTN API
-func (s *LegacyTopupService) ProcessTopups(ctx context.Context, startDate, endDate time.Time) (int, error) {
-	// Get topups from MTN API
-	 topups, err := s.mtnClient.GetTopups(startDate, endDate)
-	 if err != nil {
-		 return 0, err
-	 }
-
-	// Process each topup
-	 processed := 0
-	 for _, t := range topups {
-		 // Check if topup already exists
-		 // Consider optimizing this check if performance becomes an issue
-		 existingTopups, err := s.topupRepo.FindByMSISDNAndRef(ctx, t.MSISDN, t.TransactionRef) // Assuming FindByMSISDNAndRef exists
-		 if err != nil {
-			 // Log error but continue processing other topups
-			 continue
-		 }
-		 if len(existingTopups) > 0 {
-			 continue // Skip if already exists
-		 }
-
-		 // Create new topup
-		 topup := &models.Topup{
-			 MSISDN:         t.MSISDN,
-			 Amount:         t.Amount,
-			 Channel:        "MTN",
-			 Date:           t.Date,
-			 TransactionRef: t.TransactionRef,
-			 Processed:      true, // Mark as processed since we are creating it here
-			 CreatedAt:      time.Now(),
-			 UpdatedAt:      time.Now(),
-		 }
-
-		 err = s.CreateTopup(ctx, topup)
-		 if err == nil {
-			 processed++
-		 } else {
-			 // Log error creating topup
-		 }
-	 }
-
-	 return processed, nil
-}
-
-// calculatePoints calculates points proportionally (1 point per 100 Naira)
+/*
+// calculatePoints determines points based on top-up amount.
+// THIS FUNCTION IS NOW DUPLICATED/REPLACED by the logic within DrawService.AllocatePointsForTopup
+// It should be removed from here to avoid confusion and maintain a single source of truth.
 func calculatePoints(amount float64) int {
-	 if amount < 100 {
-		 return 0
-	 }
-	 return int(math.Floor(amount / 100.0))
+    if amount >= 1000 {
+        return 10 // 10 points for N1000 or more
+    }
+    // 1 point for every N100
+    points := int(amount / 100)
+    return points
 }
-
-// GetTopupCount gets the total number of topups
-func (s *LegacyTopupService) GetTopupCount(ctx context.Context) (int64, error) {
-	return s.topupRepo.Count(ctx)
-}
+*/
 
 
