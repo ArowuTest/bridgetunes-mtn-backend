@@ -73,3 +73,43 @@ func calculatePoints(amount float64) int {
 */
 
 
+
+// CreateTopup is required by the TopupService interface but is not yet implemented
+// as the TopupRepository is currently undefined.
+func (s *TopupServiceImpl) CreateTopup(ctx context.Context, topup *models.Topup) error {
+	 slog.Warn("CreateTopup called but not implemented")
+	 return errors.New("CreateTopup functionality is not yet implemented")
+}
+
+// GetTopupByID is required by the TopupService interface but is not yet implemented.
+func (s *TopupServiceImpl) GetTopupByID(ctx context.Context, id primitive.ObjectID) (*models.Topup, error) {
+	 slog.Warn("GetTopupByID called but not implemented")
+	 return nil, errors.New("GetTopupByID functionality is not yet implemented")
+}
+
+// GetTopupsByMSISDN is required by the TopupService interface but is not yet implemented.
+func (s *TopupServiceImpl) GetTopupsByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Topup, error) {
+	 slog.Warn("GetTopupsByMSISDN called but not implemented")
+	 return nil, errors.New("GetTopupsByMSISDN functionality is not yet implemented")
+}
+
+// GetTopupsByDateRange is required by the TopupService interface but is not yet implemented.
+func (s *TopupServiceImpl) GetTopupsByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Topup, error) {
+	 slog.Warn("GetTopupsByDateRange called but not implemented")
+	 return nil, errors.New("GetTopupsByDateRange functionality is not yet implemented")
+}
+
+// ProcessTopups is required by the TopupService interface but is not yet implemented.
+func (s *TopupServiceImpl) ProcessTopups(ctx context.Context, startDate, endDate time.Time) (int, error) {
+	 slog.Warn("ProcessTopups called but not implemented")
+	 return 0, errors.New("ProcessTopups functionality is not yet implemented")
+}
+
+// GetTopupCount is required by the TopupService interface but is not yet implemented.
+func (s *TopupServiceImpl) GetTopupCount(ctx context.Context) (int64, error) {
+	 slog.Warn("GetTopupCount called but not implemented")
+	 return 0, errors.New("GetTopupCount functionality is not yet implemented")
+}
+
+
+
