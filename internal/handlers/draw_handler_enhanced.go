@@ -25,13 +25,7 @@ func NewDrawHandlerEnhanced(drawService services.DrawService) *DrawHandlerEnhanc
 
 // GetDrawConfig handles GET /draws/config
 func (h *DrawHandlerEnhanced) GetDrawConfig(c *gin.Context) {
-	// Parse date from query parameter
-	 dateStr := c.Query("date")
-	 date, err := time.Parse("2006-01-02", dateStr)
-	 if err != nil {
-		 // Default to today if date is not provided or invalid
-		 date = time.Now()
-	 }
+	// Date parsing removed as it's no longer used by the service method
 
 	// Get draw config from service
 	 config, err := h.drawService.GetDrawConfig(c.Request.Context()) // Use c.Request.Context(), remove date argument
@@ -261,6 +255,5 @@ func (h *DrawHandlerEnhanced) GetJackpotHistory(c *gin.Context) {
 
 	 c.JSON(http.StatusOK, history)
 }
-
 
 
