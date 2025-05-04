@@ -68,3 +68,4 @@ type Draw struct {
 	UpdatedAt                 time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
+
