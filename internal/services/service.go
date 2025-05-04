@@ -22,6 +22,7 @@ type DrawService interface {
 	GetDefaultDigitsForDay(ctx context.Context, dayOfWeek time.Weekday) ([]int, error) // Added based on handler, updated return type
 	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)    // Added based on handler
 	GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error)      // Added for build error
+	AllocatePointsForTopup(ctx context.Context, userID primitive.ObjectID, amount float64, transactionTime time.Time) (int, error) // Added for point allocation logic
 }
 
 // UserService defines the interface for user-related operations (Add other service interfaces as needed)
@@ -77,5 +78,6 @@ type NotificationService interface {
 	GetCampaignCount(ctx context.Context) (int64, error)
 	GetTemplateCount(ctx context.Context) (int64, error)
 }
+
 
 
