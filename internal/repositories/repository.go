@@ -40,6 +40,7 @@ type DrawRepository interface {
 	FindByStatus(ctx context.Context, status string) ([]*models.Draw, error)
 	FindNextScheduledDraw(ctx context.Context, currentDate time.Time) (*models.Draw, error)
 	FindLatestDrawByTypeAndStatus(ctx context.Context, drawType string, statuses []string) (*models.Draw, error) // Added missing method used in GetJackpotStatus
+	FindByDateRangeAndStatus(ctx context.Context, startDate, endDate time.Time, statuses []string) ([]*models.Draw, error) // Added missing method used in GetJackpotHistory
 }
 
 // WinnerRepository defines the interface for winner data operations
