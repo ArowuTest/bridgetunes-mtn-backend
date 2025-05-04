@@ -334,7 +334,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 					 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR selecting weighted consolation winner for %s: %s", prize.Category, selectionErr.Error()))
 					 // Decide if this should halt the draw. For now, log and continue selecting for this category.
 					 continue
-				 }
+				 } // Added missing closing brace here
 
 				 // Check if user was already selected for another consolation prize in this draw
 				 if selectedConsolationMSISDNs[winnerUser.MSISDN] {
