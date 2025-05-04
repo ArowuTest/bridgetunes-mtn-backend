@@ -8,6 +8,7 @@ import (
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
+	"go.mongodb.org/mongo-driver/bson/primitive" // Added missing import
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/exp/slog"
 )
@@ -19,43 +20,43 @@ var _ TopupService = (*TopupServiceImpl)(nil)
 type TopupServiceImpl struct {
 	userRepo             repositories.UserRepository
 	pointTransactionRepo repositories.PointTransactionRepository
-	drawService          DrawService // Inject DrawService for point allocation
+	 drawService          DrawService // Inject DrawService for point allocation
 }
 
 func NewTopupService(userRepo repositories.UserRepository, pointTransactionRepo repositories.PointTransactionRepository, drawService DrawService) *TopupServiceImpl {
 	return &TopupServiceImpl{
 		userRepo:             userRepo,
 		pointTransactionRepo: pointTransactionRepo,
-		drawService:          drawService,
+		 drawService:          drawService,
 	}
 }
 
 // ProcessTopup processes a top-up event, finds the user, and allocates points.
 func (s *TopupServiceImpl) ProcessTopup(ctx context.Context, msisdn string, amount float64, transactionTime time.Time) error {
-	slog.Info("Processing top-up", "msisdn", msisdn, "amount", amount, "time", transactionTime)
+	 slog.Info("Processing top-up", "msisdn", msisdn, "amount", amount, "time", transactionTime)
 
-	// 1. Find the user by MSISDN
-	user, err := s.userRepo.FindByMSISDN(ctx, msisdn)
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			slog.Warn("User not found for top-up", "msisdn", msisdn)
-			// Depending on requirements, we might create the user here or just ignore the top-up
-			return fmt.Errorf("user with MSISDN %s not found", msisdn)
-		}
-		slog.Error("Failed to find user by MSISDN", "error", err, "msisdn", msisdn)
-		return fmt.Errorf("failed to retrieve user: %w", err)
-	}
+	 // 1. Find the user by MSISDN
+	 user, err := s.userRepo.FindByMSISDN(ctx, msisdn)
+	 if err != nil {
+		 if errors.Is(err, mongo.ErrNoDocuments) {
+			 slog.Warn("User not found for top-up", "msisdn", msisdn)
+			 // Depending on requirements, we might create the user here or just ignore the top-up
+			 return fmt.Errorf("user with MSISDN %s not found", msisdn)
+		 }
+		 slog.Error("Failed to find user by MSISDN", "error", err, "msisdn", msisdn)
+		 return fmt.Errorf("failed to retrieve user: %w", err)
+	 }
 
-	// 2. Allocate points using the DrawService's method
-	// The DrawService now contains the canonical point calculation logic
-	pointsToAdd, err := s.drawService.AllocatePointsForTopup(ctx, user.ID, amount, transactionTime)
-	if err != nil {
-		// Error is already logged within AllocatePointsForTopup
-		return fmt.Errorf("failed to allocate points for top-up: %w", err)
-	}
+	 // 2. Allocate points using the DrawService's method
+	 // The DrawService now contains the canonical point calculation logic
+	 pointsToAdd, err := s.drawService.AllocatePointsForTopup(ctx, user.ID, amount, transactionTime)
+	 if err != nil {
+		 // Error is already logged within AllocatePointsForTopup
+		 return fmt.Errorf("failed to allocate points for top-up: %w", err)
+	 }
 
-	slog.Info("Top-up processed successfully", "msisdn", msisdn, "amount", amount, "pointsAdded", pointsToAdd, "userId", user.ID)
-	return nil
+	 slog.Info("Top-up processed successfully", "msisdn", msisdn, "amount", amount, "pointsAdded", pointsToAdd, "userId", user.ID)
+	 return nil
 }
 
 /*
@@ -110,6 +111,5 @@ func (s *TopupServiceImpl) GetTopupCount(ctx context.Context) (int64, error) {
 	 slog.Warn("GetTopupCount called but not implemented")
 	 return 0, errors.New("GetTopupCount functionality is not yet implemented")
 }
-
 
 
