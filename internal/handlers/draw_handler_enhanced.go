@@ -34,7 +34,7 @@ func (h *DrawHandlerEnhanced) GetDrawConfig(c *gin.Context) {
 	 }
 
 	// Get draw config from service
-	 config, err := h.drawService.GetDrawConfig(c, date)
+	 config, err := h.drawService.GetDrawConfig(c.Request.Context()) // Use c.Request.Context(), remove date argument
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draw configuration: " + err.Error()})
 		 return
@@ -53,7 +53,7 @@ func (h *DrawHandlerEnhanced) GetPrizeStructure(c *gin.Context) {
 	 }
 
 	// Get prize structure from service
-	 structure, err := h.drawService.GetPrizeStructure(c, drawType)
+	 structure, err := h.drawService.GetPrizeStructure(c.Request.Context(), drawType) // Use c.Request.Context()
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get prize structure: " + err.Error()})
 		 return
@@ -67,7 +67,7 @@ func (h *DrawHandlerEnhanced) UpdatePrizeStructure(c *gin.Context) {
 	// Parse request body
 	 var request struct {
 		 DrawType string `json:"draw_type" binding:"required"`
-		 Prizes []models.PrizeStructure `json:"prizes" binding:"required"`
+		 Prizes []models.Prize `json:"prizes" binding:"required"` // Changed to models.Prize
 	 }
 	 if err := c.ShouldBindJSON(&request); err != nil {
 		 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -81,7 +81,7 @@ func (h *DrawHandlerEnhanced) UpdatePrizeStructure(c *gin.Context) {
 	 }
 
 	// Update prize structure
-	 err := h.drawService.UpdatePrizeStructure(c, request.DrawType, request.Prizes)
+	 err := h.drawService.UpdatePrizeStructure(c.Request.Context(), request.DrawType, request.Prizes) // Use c.Request.Context()
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prize structure: " + err.Error()})
 		 return
@@ -124,7 +124,7 @@ func (h *DrawHandlerEnhanced) ScheduleDraw(c *gin.Context) {
 	 }
 
 	// Schedule draw - Pass arguments in correct order
-	 draw, err := h.drawService.ScheduleDraw(c, drawDate, request.DrawType, request.EligibleDigits, request.UseDefault)
+	 draw, err := h.drawService.ScheduleDraw(c.Request.Context(), drawDate, request.DrawType, request.EligibleDigits, request.UseDefault) // Use c.Request.Context()
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to schedule draw: " + err.Error()})
 		 return
@@ -144,7 +144,7 @@ func (h *DrawHandlerEnhanced) ExecuteDraw(c *gin.Context) {
 	 }
 
 	// Execute draw - Capture both return values
-	 _, err = h.drawService.ExecuteDraw(c, drawID) // Capture draw object if needed later, otherwise use _
+	 _, err = h.drawService.ExecuteDraw(c.Request.Context(), drawID) // Use c.Request.Context(), Capture draw object if needed later, otherwise use _
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute draw: " + err.Error()})
 		 return
@@ -164,7 +164,7 @@ func (h *DrawHandlerEnhanced) GetDrawByID(c *gin.Context) {
 	 }
 
 	// Get draw from service
-	 draw, err := h.drawService.GetDrawByID(c, drawID) // Assuming DrawService has GetDrawByID
+	 draw, err := h.drawService.GetDrawByID(c.Request.Context(), drawID) // Use c.Request.Context(), Assuming DrawService has GetDrawByID
 	 if err != nil {
 	 	 c.JSON(http.StatusNotFound, gin.H{"error": "Draw not found: " + err.Error()})
 	 	 return
@@ -183,7 +183,7 @@ func (h *DrawHandlerEnhanced) GetWinnersByDrawID(c *gin.Context) {
 	 }
 
 	// Get winners from service
-	 winners, err := h.drawService.GetWinnersByDrawID(c, drawID) // Assuming DrawService has GetWinnersByDrawID
+	 winners, err := h.drawService.GetWinnersByDrawID(c.Request.Context(), drawID) // Use c.Request.Context(), Assuming DrawService has GetWinnersByDrawID
 	 if err != nil {
 	 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get winners: " + err.Error()})
 	 	 return
@@ -218,7 +218,7 @@ func (h *DrawHandlerEnhanced) GetDraws(c *gin.Context) {
 	 }
 
 	// Get draws from service
-	 draws, err := h.drawService.GetDraws(c, startDate, endDate) // Assuming DrawService has GetDraws
+	 draws, err := h.drawService.GetDraws(c.Request.Context(), startDate, endDate) // Use c.Request.Context(), Assuming DrawService has GetDraws
 	 if err != nil {
 	 	 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get draws: " + err.Error()})
 	 	 return
@@ -253,7 +253,7 @@ func (h *DrawHandlerEnhanced) GetJackpotHistory(c *gin.Context) {
 	 }
 
 	// Get jackpot history from service
-	 history, err := h.drawService.GetJackpotHistory(c, startDate, endDate)
+	 history, err := h.drawService.GetJackpotHistory(c.Request.Context(), startDate, endDate) // Use c.Request.Context()
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get jackpot history: " + err.Error()})
 		 return
@@ -261,4 +261,6 @@ func (h *DrawHandlerEnhanced) GetJackpotHistory(c *gin.Context) {
 
 	 c.JSON(http.StatusOK, history)
 }
+
+
 
