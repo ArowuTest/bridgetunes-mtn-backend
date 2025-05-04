@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors" // Added missing import
 	"net/http"
 	"strings"
 	"time"
@@ -247,5 +248,4 @@ func (h *DrawHandler) DeleteDraw(c *gin.Context) {
 func (h *DrawHandler) GetWinners(c *gin.Context) {
 	 c.JSON(http.StatusNotImplemented, gin.H{"message": "GetWinners endpoint not implemented (use /draws/:id/winners)"})
 }
-
 
