@@ -339,3 +339,4 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 				 // Check if user was already selected for another consolation prize in this draw
 				 if selectedConsolationMSISDNs[winnerUser.MSISDN] {
 				}
+}
