@@ -190,3 +190,49 @@ func (r *DrawRepository) FindLatestDrawByTypeAndStatus(ctx context.Context, draw
 }
 
 
+// FindByDateRangeAndStatus finds draws within a date range and matching one of the statuses.
+func (r *DrawRepository) FindByDateRangeAndStatus(ctx context.Context, startDate, endDate time.Time, statuses []string) ([]*models.Draw, error) {
+	filter := bson.M{}
+
+	// Date range filter
+	dateFilter := bson.M{}
+	 if !startDate.IsZero() {
+		 dateFilter["$gte"] = startDate
+	 }
+	 if !endDate.IsZero() {
+		 // Use $lt for end date to exclude the exact start of the next day
+		 dateFilter["$lt"] = endDate
+	 }
+	 if len(dateFilter) > 0 {
+		 filter["drawDate"] = dateFilter
+	 }
+
+	// Status filter
+	 if len(statuses) > 0 {
+		 filter["status"] = bson.M{"$in": statuses}
+	 }
+
+	// Sort by date descending
+	 opts := options.Find().SetSort(bson.M{"drawDate": -1})
+
+	 cursor, err := r.collection.Find(ctx, filter, opts)
+	 if err != nil {
+		 return nil, fmt.Errorf("failed to execute find query: %w", err)
+	}
+	 defer cursor.Close(ctx)
+
+	 var draws []*models.Draw
+	 if err := cursor.All(ctx, &draws); err != nil {
+		 return nil, fmt.Errorf("failed to decode draws: %w", err)
+	}
+
+	// Return an empty slice instead of nil if no documents are found
+	 if draws == nil {
+		 draws = []*models.Draw{}
+	 }
+
+	 return draws, nil
+}
+
+
+
