@@ -30,6 +30,7 @@ const (
 	JackpotValidationPending        JackpotValidationStatus = "PENDING"
 	JackpotValidationValid          JackpotValidationStatus = "VALID"
 	JackpotValidationInvalidNotOptIn JackpotValidationStatus = "INVALID_NOT_OPT_IN"
+	JackpotValidationNoParticipantsStatus JackpotValidationStatus = "NO_PARTICIPANTS" // Renamed constant
 	// Add other invalid reasons as needed
 )
 
@@ -66,5 +67,4 @@ type Draw struct {
 	CreatedAt                 time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt                 time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
-
 
