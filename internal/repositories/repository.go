@@ -78,6 +78,7 @@ type PointTransactionRepository interface {
 type JackpotRolloverRepository interface {
 	Create(ctx context.Context, rollover *models.JackpotRollover) error
 	FindRolloversByDestinationDate(ctx context.Context, destinationDate time.Time) ([]*models.JackpotRollover, error)
+	FindPendingRollovers(ctx context.Context, effectiveDate time.Time) ([]*models.JackpotRollover, error) // Added missing method used in GetJackpotStatus
 }
 
 // AdminUserRepository defines the interface for admin user data operations (Added)
@@ -89,5 +90,6 @@ type AdminUserRepository interface {
 	Delete(ctx context.Context, id primitive.ObjectID) error
 	FindAll(ctx context.Context) ([]*models.AdminUser, error)
 }
+
 
 
