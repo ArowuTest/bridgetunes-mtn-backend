@@ -22,6 +22,9 @@ type UserRepository interface {
 	FindUsersByRechargeWindow(ctx context.Context, startTime, endTime time.Time) ([]*models.User, error)
 	FindEligibleConsolationUsers(ctx context.Context, digits []int, optInCutoff, rechargeStart, rechargeEnd time.Time) ([]*models.User, error)
 	IncrementPoints(ctx context.Context, userID primitive.ObjectID, points int) error
+	FindByOptInStatus(ctx context.Context, optInStatus bool) ([]*models.User, error) // Added missing method
+	FindByEligibleDigits(ctx context.Context, digits []int) ([]*models.User, error) // Added missing method
+	Count(ctx context.Context) (int64, error) // Added missing method
 }
 
 // DrawRepository defines the interface for draw data operations
