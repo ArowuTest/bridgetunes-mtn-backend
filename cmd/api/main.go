@@ -69,6 +69,9 @@ func main() {
 	// Initialize Blacklist and SystemConfig repositories
 	var blacklistRepo repositories.BlacklistRepository = mongorepo.NewBlacklistRepository(db) // Uncommented
 	var systemConfigRepo repositories.SystemConfigRepository = mongorepo.NewSystemConfigRepository(db) // Uncommented
+	// Initialize PointTransaction and JackpotRollover repositories (Added)
+	var pointTransactionRepo repositories.PointTransactionRepository = mongorepo.NewPointTransactionRepository(db)
+	var jackpotRolloverRepo repositories.JackpotRolloverRepository = mongorepo.NewJackpotRolloverRepository(db)
 
 	// Initialize External Clients
 	 mtnClient := mtnapi.NewClient(cfg.MTN.BaseURL, cfg.MTN.APIKey, cfg.MTN.APISecret, cfg.MTN.MockAPI)
@@ -93,12 +96,11 @@ func main() {
 	 // Use correct constructor name: NewDrawService instead of NewLegacyDrawService
 	 drawServiceInstance := services.NewDrawService(drawRepo, userRepo, winnerRepo, blacklistRepo, systemConfigRepo, pointTransactionRepo, jackpotRolloverRepo) // Added missing pointTransactionRepo, jackpotRolloverRepo
 	 // Use correct constructor name: NewTopupService instead of NewLegacyTopupService
-	 topupServiceInstance := services.NewTopupService(topupRepo, drawServiceInstance, mtnClient) // Pass drawServiceInstance
+	 // Pass correct arguments: userRepo, pointTransactionRepo, drawServiceInstance
+	 topupServiceInstance := services.NewTopupService(userRepo, pointTransactionRepo, drawServiceInstance)
+	 // Use correct arguments for NewLegacyNotificationService: userRepo, mtnGateway, kodobeGateway, cfg.SMS.DefaultGateway
 	 legacyNotificationService := services.NewLegacyNotificationService(
-	 	notificationRepo,
-	 	 templateRepo,
-	 	 campaignRepo,
-	 	 userRepo,
+	 	userRepo, // Corrected: Pass userRepo
 	 	 mtnGateway,
 	 	 kodobeGateway,
 	 	 cfg.SMS.DefaultGateway,
