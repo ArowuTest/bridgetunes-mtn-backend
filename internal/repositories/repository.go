@@ -96,4 +96,47 @@ type AdminUserRepository interface {
 }
 
 
+// TopupRepository defines the interface for topup data operations
+type TopupRepository interface {
+	Create(ctx context.Context, topup *models.Topup) error
+	FindByID(ctx context.Context, id primitive.ObjectID) (*models.Topup, error)
+	FindByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Topup, error)
+	FindByDateRange(ctx context.Context, start, end time.Time, page, limit int) ([]*models.Topup, error)
+	Count(ctx context.Context) (int64, error)
+}
+
+// NotificationRepository defines the interface for notification data operations
+type NotificationRepository interface {
+	Create(ctx context.Context, notification *models.Notification) error
+	FindByID(ctx context.Context, id primitive.ObjectID) (*models.Notification, error)
+	FindByMSISDN(ctx context.Context, msisdn string, page, limit int) ([]*models.Notification, error)
+	FindByCampaignID(ctx context.Context, campaignID primitive.ObjectID, page, limit int) ([]*models.Notification, error)
+	FindByStatus(ctx context.Context, status string, page, limit int) ([]*models.Notification, error)
+	UpdateStatus(ctx context.Context, id primitive.ObjectID, status string, statusMessage string) error
+	Count(ctx context.Context) (int64, error)
+}
+
+// TemplateRepository defines the interface for template data operations
+type TemplateRepository interface {
+	Create(ctx context.Context, template *models.Template) error
+	FindByID(ctx context.Context, id primitive.ObjectID) (*models.Template, error)
+	FindByName(ctx context.Context, name string) (*models.Template, error)
+	FindByType(ctx context.Context, templateType string, page, limit int) ([]*models.Template, error)
+	FindAll(ctx context.Context, page, limit int) ([]*models.Template, error)
+	Update(ctx context.Context, template *models.Template) error
+	Delete(ctx context.Context, id primitive.ObjectID) error
+	Count(ctx context.Context) (int64, error)
+}
+
+// CampaignRepository defines the interface for campaign data operations
+type CampaignRepository interface {
+	Create(ctx context.Context, campaign *models.Campaign) error
+	FindByID(ctx context.Context, id primitive.ObjectID) (*models.Campaign, error)
+	FindAll(ctx context.Context, page, limit int) ([]*models.Campaign, error)
+	Update(ctx context.Context, campaign *models.Campaign) error
+	Delete(ctx context.Context, id primitive.ObjectID) error
+	Count(ctx context.Context) (int64, error)
+}
+
+
 
