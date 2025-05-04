@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings" // Added import
 	"time"
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
@@ -213,6 +214,40 @@ func (r *UserRepository) Count(ctx context.Context) (int64, error) {
 	}
 	 return count, nil
 }
+
+
+// FindByEligibleDigits finds users matching the last digits of their MSISDN.
+func (r *UserRepository) FindByEligibleDigits(ctx context.Context, digits []int) ([]*models.User, error) {
+	filter := bson.M{}
+
+	 if len(digits) > 0 {
+		 // Build regex to match numbers ending in the specified digits
+		 regexPatterns := []string{}
+		 for _, digit := range digits {
+			 regexPatterns = append(regexPatterns, fmt.Sprintf("%d$", digit))
+		 }
+		 filter["msisdn"] = bson.M{"regex": primitive.Regex{Pattern: strings.Join(regexPatterns, "|"), Options: ""}}
+	 } else {
+		 // If no digits are provided, maybe return all users or an empty list? Returning empty for now.
+		 return []*models.User{}, nil
+	 }
+
+	 cursor, err := r.collection.Find(ctx, filter)
+	 if err != nil {
+		 return nil, fmt.Errorf("failed to query users by eligible digits: %w", err)
+	}
+	 defer cursor.Close(ctx)
+
+	 var users []*models.User
+	 if err := cursor.All(ctx, &users); err != nil {
+		 return nil, fmt.Errorf("failed to decode users by eligible digits: %w", err)
+	}
+	 if users == nil {
+		 users = []*models.User{}
+	 }
+	 return users, nil
+}
+
 
 
 
