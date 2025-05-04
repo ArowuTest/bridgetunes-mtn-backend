@@ -170,3 +170,23 @@ func (r *DrawRepository) FindAll(ctx context.Context) ([]*models.Draw, error) {
 }
 
 
+
+// FindLatestDrawByTypeAndStatus finds the most recent draw matching the type and one of the statuses.
+func (r *DrawRepository) FindLatestDrawByTypeAndStatus(ctx context.Context, drawType string, statuses []string) (*models.Draw, error) {
+	filter := bson.M{
+		"drawType": drawType,
+		"status":   bson.M{"$in": statuses},
+	}
+	// Sort by date descending and get the first one (the latest)
+	opts := options.FindOne().SetSort(bson.M{"drawDate": -1})
+
+	var draw models.Draw
+	 err := r.collection.FindOne(ctx, filter, opts).Decode(&draw)
+	 if err != nil {
+		 // Return mongo.ErrNoDocuments if no matching draw is found
+		 return nil, err
+	}
+	 return &draw, nil
+}
+
+
