@@ -41,7 +41,7 @@ type UserService interface {
 	OptOut(ctx context.Context, msisdn string) error
 	AddPoints(ctx context.Context, msisdn string, points int) error
 	GetUserCount(ctx context.Context) (int64, error)
-	AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64) error // Added for draw logic
+	// AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64) error // Removed - Logic moved to DrawService
 }
 
 // TopupService defines the interface for topup-related operations
