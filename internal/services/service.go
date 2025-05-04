@@ -19,7 +19,7 @@ type DrawService interface {
 	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
 	GetDraws(ctx context.Context, startDate, endDate time.Time) ([]*models.Draw, error)
 	// GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) // Example, might need specific model
-	GetDefaultDigitsForDay(ctx context.Context, dayOfWeek time.Weekday) []int // Added based on handler
+	GetDefaultDigitsForDay(ctx context.Context, dayOfWeek time.Weekday) ([]int, error) // Added based on handler, updated return type
 	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)    // Added based on handler
 	GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error)      // Added for build error
 }
