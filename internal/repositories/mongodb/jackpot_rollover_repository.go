@@ -86,3 +86,41 @@ func (r *JackpotRolloverRepository) FindRolloversByDestinationDate(ctx context.C
 	 return rollovers, nil
 }
 
+
+
+// FindPendingRollovers finds rollover records created after a certain date or targeting a future date.
+// Used by GetJackpotStatus to calculate the current effective jackpot amount.
+func (r *JackpotRolloverRepository) FindPendingRollovers(ctx context.Context, effectiveDate time.Time) ([]*models.JackpotRollover, error) {
+	// Find rollovers where the destination date is after the effective date
+	filter := bson.M{
+		"destinationDrawDate": bson.M{
+			"$gt": effectiveDate,
+		},
+	}
+	// Optionally, could also include rollovers created after effectiveDate, regardless of destination?
+	// filter := bson.M{
+	// 	"$or": []bson.M{
+	// 		{"destinationDrawDate": bson.M{"$gt": effectiveDate}},
+	// 		{"createdAt": bson.M{"$gt": effectiveDate}},
+	// 	},
+	// }
+
+	 opts := options.Find().SetSort(bson.M{"createdAt": 1}) // Sort by creation time ascending
+
+	 cursor, err := r.collection.Find(ctx, filter, opts)
+	 if err != nil {
+		 return nil, fmt.Errorf("error finding pending rollovers after %s: %w", effectiveDate.Format(time.RFC3339), err)
+	 }
+	 defer cursor.Close(ctx)
+
+	 var rollovers []*models.JackpotRollover
+	 if err := cursor.All(ctx, &rollovers); err != nil {
+		 return nil, fmt.Errorf("error decoding pending rollovers after %s: %w", effectiveDate.Format(time.RFC3339), err)
+	 }
+	 if rollovers == nil {
+		 rollovers = []*models.JackpotRollover{}
+	 }
+	 return rollovers, nil
+}
+
+
