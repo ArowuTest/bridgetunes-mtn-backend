@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"sort"
 	"strings" // Added for prize structure parsing
 	"time"
 
@@ -386,7 +385,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 					 PrizeCategory: prize.Category,
 					 PrizeAmount:  prize.Amount,
 					 ClaimStatus:  models.ClaimStatusPending, // Use ClaimStatus
-					 DrawDate:     draw.DrawDate,
+					 WinDate:      draw.DrawDate,
 					 CreatedAt:    time.Now(),
 					 UpdatedAt:    time.Now(),
 				 }
@@ -422,7 +421,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 				 PrizeCategory: models.JackpotCategory,
 				 PrizeAmount:  jackpotPrizeAmount,
 				 ClaimStatus:  models.ClaimStatusPending,
-				 DrawDate:     draw.DrawDate,
+				 WinDate:      draw.DrawDate,
 				 CreatedAt:    time.Now(),
 				 UpdatedAt:    time.Now(),
 			 }
@@ -770,5 +769,6 @@ func calculatePoints(amount float64) int {
 	 points := int(amount / 100)
 	 return points
 }
+
 
 
