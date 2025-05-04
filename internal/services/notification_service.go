@@ -16,9 +16,9 @@ var _ NotificationService = (*LegacyNotificationService)(nil)
 
 // LegacyNotificationService handles notification-related business logic
 type LegacyNotificationService struct {
-	// notificationRepo repositories.NotificationRepository // Commented out - undefined
-	// campaignRepo     repositories.CampaignRepository // Commented out - undefined
-	// templateRepo     repositories.TemplateRepository // Commented out - undefined
+	// notificationRepo repositories.NotificationRepository // Commented out - Keep commented
+	// campaignRepo     repositories.CampaignRepository // Commented out - Keep commented
+	// templateRepo     repositories.TemplateRepository // Commented out - Keep commented
 	userRepo         repositories.UserRepository // Use interface type for dependency
 	mtnGateway       smsgateway.Gateway
 	 kodobeGateway    smsgateway.Gateway
@@ -27,18 +27,18 @@ type LegacyNotificationService struct {
 
 // NewLegacyNotificationService creates a new LegacyNotificationService
 func NewLegacyNotificationService(
-	// notificationRepo repositories.NotificationRepository, // Commented out - undefined
-	// templateRepo repositories.TemplateRepository, // Commented out - undefined
-	// campaignRepo repositories.CampaignRepository, // Commented out - undefined
+	// notificationRepo repositories.NotificationRepository, // Keep commented
+	// templateRepo repositories.TemplateRepository, // Keep commented
+	// campaignRepo repositories.CampaignRepository, // Keep commented
 	 userRepo repositories.UserRepository, // Use interface type for dependency
 	 mtnGateway smsgateway.Gateway,
 	 kodobeGateway smsgateway.Gateway,
 	 defaultGateway string,
 ) *LegacyNotificationService {
 	return &LegacyNotificationService{
-		// notificationRepo: notificationRepo, // Commented out - undefined
-		// templateRepo:     templateRepo, // Commented out - undefined
-		// campaignRepo:     campaignRepo, // Commented out - undefined
+		// notificationRepo: notificationRepo, // Keep commented
+		// templateRepo:     templateRepo, // Keep commented
+		// campaignRepo:     campaignRepo, // Keep commented
 		 userRepo:         userRepo,
 		 mtnGateway:       mtnGateway,
 		 kodobeGateway:    kodobeGateway,
