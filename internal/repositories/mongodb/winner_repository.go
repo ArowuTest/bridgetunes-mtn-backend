@@ -181,3 +181,25 @@ func (r *WinnerRepository) FindByDrawIDAndCategory(ctx context.Context, drawID p
 	 return winners, nil
 }
 
+
+
+// FindAll finds all winners (consider pagination for large datasets)
+func (r *WinnerRepository) FindAll(ctx context.Context) ([]*models.Winner, error) {
+	 opts := options.Find().SetSort(bson.M{"winDate": -1}) // Sort by win date descending
+	 cursor, err := r.collection.Find(ctx, bson.M{}, opts)
+	 if err != nil {
+		 return nil, err
+	}
+	 defer cursor.Close(ctx)
+
+	 var winners []*models.Winner
+	 if err := cursor.All(ctx, &winners); err != nil {
+		 return nil, err
+	}
+	 if winners == nil {
+		 winners = []*models.Winner{}
+	 }
+	 return winners, nil
+}
+
+
