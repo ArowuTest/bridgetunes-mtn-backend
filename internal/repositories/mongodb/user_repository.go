@@ -249,5 +249,26 @@ func (r *UserRepository) FindByEligibleDigits(ctx context.Context, digits []int)
 }
 
 
+// FindByOptInStatus finds users by their opt-in status.
+func (r *UserRepository) FindByOptInStatus(ctx context.Context, optInStatus bool) ([]*models.User, error) {
+	filter := bson.M{"optInStatus": optInStatus}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	 if err != nil {
+		 return nil, fmt.Errorf("failed to query users by opt-in status: %w", err)
+	}
+	 defer cursor.Close(ctx)
+
+	 var users []*models.User
+	 if err := cursor.All(ctx, &users); err != nil {
+		 return nil, fmt.Errorf("failed to decode users by opt-in status: %w", err)
+	}
+	 if users == nil {
+		 users = []*models.User{}
+	 }
+	 return users, nil
+}
+
+
 
 
