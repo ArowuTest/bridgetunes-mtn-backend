@@ -119,3 +119,17 @@ func (r *NotificationRepository) Delete(ctx context.Context, id primitive.Object
 func (r *NotificationRepository) Count(ctx context.Context) (int64, error) {
 	return r.collection.CountDocuments(ctx, bson.M{})
 }
+
+// UpdateStatus updates the status and status message of a notification
+func (r *NotificationRepository) UpdateStatus(ctx context.Context, id primitive.ObjectID, status string, statusMessage string) error {
+	update := bson.M{
+		"$set": bson.M{
+			"status":        status,
+			"statusMessage": statusMessage,
+			"updatedAt":     time.Now(),
+		},
+	}
+	_, err := r.collection.UpdateByID(ctx, id, update)
+	return err
+}
+
