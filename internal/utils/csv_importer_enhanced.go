@@ -12,14 +12,14 @@ import (
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/repositories"
-	// "go.mongodb.org/mongo-driver/bson/primitive" // Removed unused import
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/exp/slog"
 )
 
 // CSVImporterEnhanced provides enhanced functionality for importing data from CSV files
 type CSVImporterEnhanced struct {
 	userRepo   repositories.UserRepository
-	// topupRepo  repositories.TopupRepository // Assuming Topup repo is not directly needed here and is undefined
+	// topupRepo  repositories.TopupRepository // Assuming Topup repo is not directly needed here
 	// drawRepo   repositories.DrawRepository
 	// winnerRepo repositories.WinnerRepository
 	configRepo repositories.SystemConfigRepository
@@ -28,7 +28,7 @@ type CSVImporterEnhanced struct {
 // NewCSVImporterEnhanced creates a new CSVImporterEnhanced
 func NewCSVImporterEnhanced(
 	userRepo repositories.UserRepository,
-	// topupRepo repositories.TopupRepository, // Assuming Topup repo is not directly needed here and is undefined
+	// topupRepo repositories.TopupRepository,
 	// drawRepo repositories.DrawRepository,
 	// winnerRepo repositories.WinnerRepository,
 	configRepo repositories.SystemConfigRepository,
@@ -183,7 +183,7 @@ func (i *CSVImporterEnhanced) ImportUsersAndTopups(ctx context.Context, filePath
 		 }
 
 		// Create topup if amount is provided (Assuming Topup model and repo exist)
-		/* // Commenting out Topup creation as repo is not injected or defined
+		/* // Commenting out Topup creation as repo is not injected
 		 if amount > 0 && i.topupRepo != nil {
 			 topup := &models.Topup{
 				 MSISDN:        msisdn,
@@ -248,8 +248,8 @@ func (i *CSVImporterEnhanced) ImportPrizeStructures(ctx context.Context, filePat
 	}
 
 	// Initialize prize structures
-	var dailyPrizes []models.Prize // Use Prize
-	var weeklyPrizes []models.Prize // Use Prize
+	var dailyPrizes []models.Prize // Changed from PrizeStructure
+	var weeklyPrizes []models.Prize // Changed from PrizeStructure
 
 	// Process each row
 	for {
@@ -295,9 +295,9 @@ func (i *CSVImporterEnhanced) ImportPrizeStructures(ctx context.Context, filePat
 
 			 amount, err := strconv.ParseFloat(amountStr, 64)
 			 if err != nil {
-				 results["errors"] = append(results["errors"].([]string), fmt.Sprintf("Row %d: Invalid daily amount 	%s	: %v", results["totalRows"], row[dailyAmountIdx], err))
+				 results["errors"] = append(results["errors"].([]string), fmt.Sprintf("Row %d: Invalid daily amount ", results["totalRows"], row[dailyAmountIdx], err))
 			 } else {
-				 dailyPrizes = append(dailyPrizes, models.Prize{ // Use Prize
+				 dailyPrizes = append(dailyPrizes, models.Prize{ // Changed from PrizeStructure
 					 Category: category,
 					 Amount:   amount,
 					 NumWinners: count, // Use NumWinners field
@@ -316,9 +316,9 @@ func (i *CSVImporterEnhanced) ImportPrizeStructures(ctx context.Context, filePat
 
 			 amount, err := strconv.ParseFloat(amountStr, 64)
 			 if err != nil {
-				 results["errors"] = append(results["errors"].([]string), fmt.Sprintf("Row %d: Invalid weekly amount 	%s	: %v", results["totalRows"], row[weeklyAmountIdx], err))
+				 results["errors"] = append(results["errors"].([]string), fmt.Sprintf("Row %d: Invalid weekly amount ", results["totalRows"], row[weeklyAmountIdx], err))
 			 } else {
-				 weeklyPrizes = append(weeklyPrizes, models.Prize{ // Use Prize
+				 weeklyPrizes = append(weeklyPrizes, models.Prize{ // Changed from PrizeStructure
 					 Category: category,
 					 Amount:   amount,
 					 NumWinners: count, // Use NumWinners field
@@ -329,8 +329,9 @@ func (i *CSVImporterEnhanced) ImportPrizeStructures(ctx context.Context, filePat
 	}
 
 	// Save prize structures to system config using UpsertByKey
+	// Corrected calls to UpsertByKey: removed description argument
 	 if len(dailyPrizes) > 0 {
-		 err = i.configRepo.UpsertByKey(ctx, "prize_structure_DAILY", dailyPrizes, "Daily prize structure (imported from CSV)")
+		 err = i.configRepo.UpsertByKey(ctx, "prize_structure_DAILY", dailyPrizes)
 		 if err != nil {
 			 results["errors"] = append(results["errors"].([]string), fmt.Sprintf("Failed to save daily prize structure: %v", err))
 			 slog.Error("Failed to upsert daily prize structure", "error", err)
@@ -338,7 +339,7 @@ func (i *CSVImporterEnhanced) ImportPrizeStructures(ctx context.Context, filePat
 	 }
 
 	 if len(weeklyPrizes) > 0 {
-		 err = i.configRepo.UpsertByKey(ctx, "prize_structure_SATURDAY", weeklyPrizes, "Saturday prize structure (imported from CSV)")
+		 err = i.configRepo.UpsertByKey(ctx, "prize_structure_SATURDAY", weeklyPrizes)
 		 if err != nil {
 			 results["errors"] = append(results["errors"].([]string), fmt.Sprintf("Failed to save weekly prize structure: %v", err))
 			 slog.Error("Failed to upsert weekly prize structure", "error", err)
@@ -450,4 +451,5 @@ func standardizeCategoryName(name string) string {
 		 return name // Return standardized name if no specific mapping
 	 }
 }
+
 
