@@ -58,6 +58,7 @@ func NewDrawService(
 
 // --- Core Draw Lifecycle Methods (Refactored & Refined) ---
 
+
 // ScheduleDraw schedules a new draw, incorporating configuration and rollover logic
 func (s *DrawServiceImpl) ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error) {
 	 // 1. Check if a draw already exists for this date
@@ -137,6 +138,7 @@ func (s *DrawServiceImpl) ScheduleDraw(ctx context.Context, drawDate time.Time, 
 	 slog.Info("Draw scheduled successfully", "drawId", draw.ID, "date", drawDate, "type", drawType, "jackpot", calculatedJackpot)
 	 return draw, nil
 }
+
 
 // ExecuteDraw executes a scheduled draw, including eligibility, selection, validation, and rollover
 func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error) {
@@ -329,120 +331,128 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 			 for i := 0; i < prize.NumWinners; i++ {
 				 if len(weightedPoolB) == 0 {
 					 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Weighted pool B exhausted while selecting for %s prize", prize.Category))
-					 break // Stop selecting for this prize category if pool is empty
+					 break // Stop selecting for this prize category
 				 }
 
-				 winnerUser, remainingPool, selectionErr := selectWeightedWinner(weightedPoolB)
-				 weightedPoolB = remainingPool // Update pool for next selection
+				 var consolationWinner *models.User
+				 var selectionErr error
+				 attempts := 0
+				 maxAttempts := len(weightedPoolB) * 2 // Safety break
 
-				 if selectionErr != nil {
-					 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR selecting weighted consolation winner for %s: %s", prize.Category, selectionErr.Error()))
-					 // Decide if this should halt the draw. For now, log and continue selecting for this category.
-					 continue
+				 for attempts < maxAttempts {
+					 attempts++
+					 consolationWinner, weightedPoolB, selectionErr = selectWeightedWinner(weightedPoolB)
+					 if selectionErr != nil {
+						 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR selecting weighted consolation winner for %s: %s", prize.Category, selectionErr.Error()))
+						 // Decide if this is fatal for the prize category or the draw
+						 // For now, log and break inner loop
+						 consolationWinner = nil // Ensure we don't process a nil winner
+						 break
+					 }
+
+					 // Check if already selected or is the jackpot winner
+					 if !selectedConsolationMSISDNs[consolationWinner.MSISDN] {
+						 selectedConsolationMSISDNs[consolationWinner.MSISDN] = true
+						 break // Found a unique winner for this slot
+					 } else {
+						 // Winner already selected, try again (pool was already modified by selectWeightedWinner)
+						 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Re-selected winner %s for %s, trying again...", maskMsisdn(consolationWinner.MSISDN), prize.Category))
+						 consolationWinner = nil // Reset winner for next loop iteration check
+						 if len(weightedPoolB) == 0 {
+							 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Pool B exhausted during re-selection for %s prize", prize.Category))
+							 break
+						 }
+					 }
 				 }
 
-				 // Check if user was already selected for another consolation prize in this draw
-				 if selectedConsolationMSISDNs[winnerUser.MSISDN] {
-					 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Skipping already selected user %s for %s prize", maskMsisdn(winnerUser.MSISDN), prize.Category))
-					 i-- // Decrement i to retry selecting for this specific slot
-					 continue // Continue to the next iteration of the inner loop
+				 if consolationWinner == nil { // If loop finished without finding a unique winner
+					 if selectionErr != nil {
+						 // Error already logged, break outer loop for this prize
+						 break
+					 } else if attempts >= maxAttempts {
+						 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Max attempts reached trying to find unique winner for %s prize", prize.Category))
+						 break // Stop selecting for this prize category
+					 } else {
+						 // Pool likely exhausted
+						 break
+					 }
 				 }
 
-				 // If user is not already selected, record them as a winner
-				 selectedConsolationMSISDNs[winnerUser.MSISDN] = true
-				 winner := &models.Winner{
+				 // Create Winner record
+				 winnerRecord := &models.Winner{
 					 DrawID:       draw.ID,
-					 UserID:       winnerUser.ID,
-					 MSISDN:       winnerUser.MSISDN,
+					 UserID:       consolationWinner.ID,
+					 MSISDN:       consolationWinner.MSISDN,
 					 PrizeCategory: prize.Category,
 					 PrizeAmount:  prize.Amount,
-					 WinDate:      draw.DrawDate, // Use DrawDate as WinDate
 					 ClaimStatus:  models.ClaimStatusPending, // Use ClaimStatus
+					 DrawDate:     draw.DrawDate,
 					 CreatedAt:    time.Now(),
 					 UpdatedAt:    time.Now(),
 				 }
-				 consolationWinners = append(consolationWinners, winner)
-				 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Consolation Winner Selected (%s): %s (Points: %d)", prize.Category, maskMsisdn(winnerUser.MSISDN), winnerUser.Points))
-
-			 } // Close inner loop: for i := 0; i < prize.NumWinners; i++
-		 } // Close outer loop: for _, prize := range draw.Prizes
-	 } // Close if len(poolB) > 0
-
-	 // 8. Save Winners (if any)
-	 var saveErr error // Declare error variable for saving winners
-	 if len(consolationWinners) > 0 {
-		 saveErr = s.winnerRepo.CreateMany(ctx, consolationWinners)
-		 if saveErr != nil {
-			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR saving consolation winners: %s", saveErr.Error()))
-			 // Decide if this is fatal. For now, log and continue.
-			 // Assign saveErr to the main 'err' if it's currently nil, so defer catches it
-			 if err == nil {
-				 err = fmt.Errorf("failed to save consolation winners: %w", saveErr)
+				 consolationWinners = append(consolationWinners, winnerRecord)
+				 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Consolation Winner Selected (%s): %s (Points: %d)", prize.Category, maskMsisdn(consolationWinner.MSISDN), consolationWinner.Points))
 			 }
-		 } else {
-			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Saved %d consolation winners", len(consolationWinners)))
 		 }
-		 draw.NumWinners = len(consolationWinners) // Update count based on actual winners
+	 } else {
+		 draw.ExecutionLog = append(draw.ExecutionLog, "Pool B is empty, cannot select Consolation Winners.")
+	 }
 
-		 if isJackpotWinnerValid {
-			 // If jackpot winner is valid, also save them
+	 // 8. Save Winners (including valid Jackpot winner if applicable)
+	 allWinnersToSave := consolationWinners
+	 if isJackpotWinnerValid && potentialJackpotWinner != nil {
+		 // Find the jackpot prize amount from the draw's prize list
+		 jackpotPrizeAmount := 0.0
+		 for _, p := range draw.Prizes {
+			 if p.Category == models.JackpotCategory {
+				 jackpotPrizeAmount = draw.CalculatedJackpotAmount // Use the calculated amount for the winner
+				 break
+			 }
+		 }
+		 if jackpotPrizeAmount == 0.0 {
+			 // This shouldn't happen if scheduling is correct, but handle defensively
+			 slog.Error("Jackpot prize category not found in draw prizes", "drawId", draw.ID)
+			 // Decide how to handle: fail draw or just log? For now, log and continue without saving jackpot winner.
+			 draw.ExecutionLog = append(draw.ExecutionLog, "ERROR: Jackpot prize category missing, cannot save jackpot winner record.")
+		 } else {
 			 jackpotWinnerRecord := &models.Winner{
 				 DrawID:       draw.ID,
 				 UserID:       potentialJackpotWinner.ID,
 				 MSISDN:       potentialJackpotWinner.MSISDN,
 				 PrizeCategory: models.JackpotCategory,
-				 PrizeAmount:  draw.CalculatedJackpotAmount, // Use calculated amount
-				 WinDate:      draw.DrawDate,
-				 ClaimStatus:  models.ClaimStatusPending, // Use ClaimStatus
+				 PrizeAmount:  jackpotPrizeAmount,
+				 ClaimStatus:  models.ClaimStatusPending,
+				 DrawDate:     draw.DrawDate,
 				 CreatedAt:    time.Now(),
 				 UpdatedAt:    time.Now(),
 			 }
-			 jackpotSaveErr := s.winnerRepo.Create(ctx, jackpotWinnerRecord)
-			 if jackpotSaveErr != nil {
-				 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR saving jackpot winner: %s", jackpotSaveErr.Error()))
-				 // Log error but don't fail the draw; assign to main 'err' if nil
-				 if err == nil {
-					 err = fmt.Errorf("failed to save jackpot winner: %w", jackpotSaveErr)
-				 }
-			 } else {
-				 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Saved valid jackpot winner %s", maskMsisdn(potentialJackpotWinner.MSISDN)))
-				 draw.NumWinners++ // Increment total winner count
-			 }
-		 }
-	 } else if isJackpotWinnerValid {
-		 // Only jackpot winner, save them
-		 jackpotWinnerRecord := &models.Winner{
-			 DrawID:       draw.ID,
-			 UserID:       potentialJackpotWinner.ID,
-			 MSISDN:       potentialJackpotWinner.MSISDN,
-			 PrizeCategory: models.JackpotCategory,
-			 PrizeAmount:  draw.CalculatedJackpotAmount,
-			 WinDate:      draw.DrawDate,
-			 ClaimStatus:  models.ClaimStatusPending,
-			 CreatedAt:    time.Now(),
-			 UpdatedAt:    time.Now(),
-		 }
-		 jackpotSaveErr := s.winnerRepo.Create(ctx, jackpotWinnerRecord)
-		 if jackpotSaveErr != nil {
-			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR saving jackpot winner: %s", jackpotSaveErr.Error()))
-			 // Assign to main 'err' if nil
-			 if err == nil {
-				 err = fmt.Errorf("failed to save jackpot winner: %w", jackpotSaveErr)
-			 }
-		 } else {
-			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Saved valid jackpot winner %s", maskMsisdn(potentialJackpotWinner.MSISDN)))
-			 draw.NumWinners = 1 // Set total winner count
+			 allWinnersToSave = append(allWinnersToSave, jackpotWinnerRecord)
+			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Jackpot Winner Record Prepared: %s, Amount: %.2f", maskMsisdn(potentialJackpotWinner.MSISDN), jackpotPrizeAmount))
 		 }
 	 }
 
-	 // 9. Final logging and return (handled by defer)
-	 return draw, err // Return the potentially modified draw object and the final error status
+	 if len(allWinnersToSave) > 0 {
+		 // Use CreateMany for efficiency
+		 createWinnersErr := s.winnerRepo.CreateMany(ctx, allWinnersToSave)
+		 if createWinnersErr != nil {
+			 // This is a significant error, fail the draw
+			 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("ERROR saving winner records: %s", createWinnersErr.Error()))
+			 return draw, fmt.Errorf("failed to save winner records: %w", createWinnersErr)
+		 }
+		 draw.NumWinners = len(allWinnersToSave)
+		 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Successfully saved %d winner records", len(allWinnersToSave)))
+	 } else {
+		 draw.ExecutionLog = append(draw.ExecutionLog, "No winners selected or eligible to be saved.")
+	 }
 
-} // Close func ExecuteDraw
+	 // 9. Final status update is handled by the deferred function
+	 return draw, nil // err will be nil here if execution reached the end without errors
+}
 
-// --- Helper & Other Service Methods ---
 
-// GetPrizeStructure retrieves the prize structure for a given draw type
+// --- Helper & Getter Methods ---
+
+// GetPrizeStructure retrieves the prize structure for a given draw type from system config
 func (s *DrawServiceImpl) GetPrizeStructure(ctx context.Context, drawType string) ([]models.Prize, error) {
 	 configKey := "prize_structure_" + strings.ToUpper(drawType)
 	 config, err := s.systemConfigRepo.FindByKey(ctx, configKey)
@@ -454,8 +464,8 @@ func (s *DrawServiceImpl) GetPrizeStructure(ctx context.Context, drawType string
 	 // Assuming the prize structure is stored as a JSON string in the config value
 	 jsonString, ok := config.Value.(string)
 	 if !ok {
-		 slog.Error("Invalid prize structure format in config: expected JSON string", "key", configKey, "valueType", fmt.Sprintf("%T", config.Value))
-		 return nil, fmt.Errorf("invalid prize structure format in config %s: expected JSON string", configKey)
+		 slog.Error("Invalid prize structure format in config (expected JSON string)", "key", configKey, "valueType", fmt.Sprintf("%T", config.Value))
+		 return nil, fmt.Errorf("invalid prize structure format in config %s (expected JSON string)", configKey)
 	 }
 
 	 var prizes []models.Prize
@@ -465,175 +475,179 @@ func (s *DrawServiceImpl) GetPrizeStructure(ctx context.Context, drawType string
 		 return nil, fmt.Errorf("failed to parse prize structure JSON for %s: %w", configKey, err)
 	 }
 
+	 // Validate structure (optional but recommended)
+	 if len(prizes) == 0 {
+		 slog.Warn("Prize structure is empty", "key", configKey)
+		 // Decide if this is an error or acceptable
+	 }
+	 // Add more validation if needed (e.g., check for Jackpot category)
+
 	 return prizes, nil
 }
 
-// UpdatePrizeStructure updates the prize structure for a given draw type
-func (s *DrawServiceImpl) UpdatePrizeStructure(ctx context.Context, drawType string, prizes []models.Prize) error {
+// UpdatePrizeStructure updates the prize structure in system config
+func (s *DrawServiceImpl) UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.Prize) error {
 	 configKey := "prize_structure_" + strings.ToUpper(drawType)
 
-	 // Marshal the prizes slice into a JSON string
-	 jsonBytes, err := json.Marshal(prizes)
+	 // Marshal the structure back to JSON string
+	 jsonBytes, err := json.Marshal(structure)
 	 if err != nil {
-		 slog.Error("Failed to marshal prize structure to JSON", "error", err, "drawType", drawType)
-		 return fmt.Errorf("failed to encode prize structure for %s: %w", drawType, err)
+		 slog.Error("Failed to marshal prize structure to JSON", "error", err, "key", configKey)
+		 return fmt.Errorf("failed to marshal prize structure for %s: %w", configKey, err)
 	 }
-	 jsonString := string(jsonBytes)
 
-	 // Upsert the JSON string into the system config
-	 err = s.systemConfigRepo.UpsertByKey(ctx, configKey, jsonString)
+	 // Upsert the JSON string into the config
+	 err = s.systemConfigRepo.UpsertByKey(ctx, configKey, string(jsonBytes))
 	 if err != nil {
 		 slog.Error("Failed to upsert prize structure config", "error", err, "key", configKey)
-		 return fmt.Errorf("failed to update prize structure config %s: %w", configKey, err)
+		 return fmt.Errorf("failed to save prize structure config %s: %w", configKey, err)
 	 }
 
-	 slog.Info("Prize structure updated successfully", "drawType", drawType)
+	 slog.Info("Prize structure updated successfully", "key", configKey)
 	 return nil
 }
 
-// GetJackpotStatus retrieves the current jackpot status
-func (s *DrawServiceImpl) GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error) {
-	 status := &models.JackpotStatus{}
-	 now := time.Now()
-
-	 // 1. Find the latest completed Saturday draw
-	 latestSaturdayDraw, err := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", models.DrawStatusCompleted)
-	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		 slog.Error("GetJackpotStatus: Failed to find latest completed Saturday draw", "error", err)
-		 return nil, fmt.Errorf("failed to query latest Saturday draw: %w", err)
+// GetWinnersByDrawID retrieves all winners for a specific draw
+func (s *DrawServiceImpl) GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error) {
+	 winners, err := s.winnerRepo.FindByDrawID(ctx, drawID)
+	 if err != nil {
+		 slog.Error("Failed to get winners by draw ID", "error", err, "drawId", drawID)
+		 return nil, fmt.Errorf("failed to retrieve winners for draw %s: %w", drawID.Hex(), err)
 	 }
-
-	 if latestSaturdayDraw != nil {
-		 status.LastDrawDate = latestSaturdayDraw.DrawDate
-		 // Find the jackpot winner for this draw
-		 jackpotWinners, findWinnerErr := s.winnerRepo.FindByDrawIDAndCategory(ctx, latestSaturdayDraw.ID, models.JackpotCategory)
-		 if findWinnerErr != nil && !errors.Is(findWinnerErr, mongo.ErrNoDocuments) {
-			 slog.Error("GetJackpotStatus: Failed to find jackpot winner for last draw", "error", findWinnerErr, "drawId", latestSaturdayDraw.ID)
-			 // Continue, but status might be incomplete
-		 } else if len(jackpotWinners) > 0 {
-			 // Assuming only one jackpot winner per draw
-			 status.LastWinnerMSISDN = jackpotWinners[0].MSISDN // Corrected field name
-			 status.LastWinAmount = jackpotWinners[0].PrizeAmount // Corrected field name
-		 }
-	 }
-
-	 // 2. Find the next scheduled Saturday draw
-	 nextSaturdayDraw, err := s.drawRepo.FindNextScheduledDrawByType(ctx, now, "SATURDAY")
-	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		 slog.Error("GetJackpotStatus: Failed to find next scheduled Saturday draw", "error", err)
-		 return nil, fmt.Errorf("failed to query next Saturday draw: %w", err)
-	 }
-
-	 if nextSaturdayDraw == nil {
-		 // If no next draw is scheduled, maybe calculate based on current date?
-		 // For now, leave it empty or return an error/specific status
-		 slog.Warn("GetJackpotStatus: No next Saturday draw found in scheduled state")
-		 // status.NextDrawDate = calculateNextSaturday(now) // Placeholder for calculation logic
-		 status.CurrentJackpotAmount = 0 // Or fetch default base if no next draw?
-	 } else {
-		 status.NextDrawDate = nextSaturdayDraw.DrawDate         // Corrected field name
-		 status.CurrentJackpotAmount = nextSaturdayDraw.CalculatedJackpotAmount
-	 }
-
-	 // 3. Add pending rollovers to the *current* jackpot amount (amount for the *next* draw)
-	 // We need rollovers destined for *after* the last completed draw up to the next scheduled draw
-	 effectiveDate := time.Time{} // Start from beginning if no last draw
-	 if latestSaturdayDraw != nil {
-		 effectiveDate = latestSaturdayDraw.DrawDate
-	 }
-	 pendingRollovers, err := s.jackpotRolloverRepo.FindPendingRollovers(ctx, effectiveDate)
-	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		 slog.Error("GetJackpotStatus: Failed to fetch pending rollovers", "error", err)
-		 // Continue, jackpot amount might not include all pending rollovers
-	 } else {
-		 for _, rollover := range pendingRollovers {
-			 // Only add rollovers destined for the *next* scheduled draw we found
-			 if nextSaturdayDraw != nil && rollover.DestinationDrawDate.Equal(nextSaturdayDraw.DrawDate) {
-				 // This logic seems redundant as FindPendingRollovers should already give relevant ones
-				 // And the next draw's CalculatedJackpotAmount should already include these.
-				 // Let's rely on nextSaturdayDraw.CalculatedJackpotAmount from step 2.
-				 // status.CurrentJackpotAmount += rollover.RolloverAmount
-			 }
-		 }
-	 }
-
-	 return status, nil
+	 return winners, nil
 }
 
-// AllocatePointsForTopup allocates points based on top-up amount
-// TODO: Refine this - should it use UserService? How are users identified/created?
-func (s *DrawServiceImpl) AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64, source string) error {
-	 // 1. Find or Create User (Simplified - assumes user exists for now)
-	 user, err := s.userRepo.FindByMSISDN(ctx, msisdn)
+// GetDraws retrieves draws within a date range
+func (s *DrawServiceImpl) GetDraws(ctx context.Context, startDate, endDate time.Time) ([]*models.Draw, error) {
+	 draws, err := s.drawRepo.FindByDateRange(ctx, startDate, endDate)
 	 if err != nil {
-		 if errors.Is(err, mongo.ErrNoDocuments) {
-			 // TODO: User creation logic needed here or in UserService
-			 slog.Warn("AllocatePointsForTopup: User not found, cannot allocate points", "msisdn", msisdn)
-			 return fmt.Errorf("user %s not found", msisdn)
-		 } else {
-			 slog.Error("AllocatePointsForTopup: Failed to find user", "error", err, "msisdn", msisdn)
-			 return fmt.Errorf("failed to find user %s: %w", msisdn, err)
-		 }
+		 slog.Error("Failed to get draws by date range", "error", err, "startDate", startDate, "endDate", endDate)
+		 return nil, fmt.Errorf("failed to retrieve draws: %w", err)
 	 }
-
-	 // 2. Calculate Points (Using the standalone utility function)
-	 points := utils.CalculatePoints(amount)
-	 if points <= 0 {
-		 slog.Info("AllocatePointsForTopup: No points awarded for amount", "msisdn", msisdn, "amount", amount)
-		 return nil // No error, just no points
-	 }
-
-	 // 3. Create Point Transaction Record
-	 transaction := &models.PointTransaction{
-		 UserID:          user.ID,
-		 MSISDN:          msisdn,
-		 PointsAwarded:   points,                     // Corrected field name
-		 TransactionType: models.TransactionTypeTopup, // Corrected field name & Use constant
-		 Description:     fmt.Sprintf("Topup of %.2f via %s", amount, source), // Corrected field name
-		 TransactionDate: time.Now(),                 // Corrected field name
-		 CreatedAt:       time.Now(),
-	 }
-	 err = s.pointTransactionRepo.Create(ctx, transaction)
-	 if err != nil {
-		 slog.Error("AllocatePointsForTopup: Failed to create point transaction", "error", err, "msisdn", msisdn)
-		 return fmt.Errorf("failed to record point transaction for %s: %w", msisdn, err)
-	 }
-
-	 // 4. Update User's Total Points
-	 err = s.userRepo.IncrementPoints(ctx, user.ID, points)
-	 if err != nil {
-		 slog.Error("AllocatePointsForTopup: Failed to update user points", "error", err, "userId", user.ID, "points", points)
-		 // Attempt to rollback or mark transaction as failed? For now, just return error.
-		 return fmt.Errorf("failed to update points for user %s: %w", msisdn, err)
-	 }
-
-	 slog.Info("Points allocated successfully", "msisdn", msisdn, "amount", amount, "points", points)
-	 return nil
+	 return draws, nil
 }
 
-// GetDrawByDate retrieves a draw by its date
+// GetDefaultDigitsForDay retrieves the default eligible digits for a given day of the week
+func (s *DrawServiceImpl) GetDefaultDigitsForDay(ctx context.Context, day time.Weekday) ([]int, error) {
+	 // This might fetch from config in the future, but for now uses the utility
+	 // Adding context to match interface, though not used here currently.
+	 digits := utils.GetDefaultEligibleDigits(day)
+	 if len(digits) == 0 {
+		 slog.Warn("No default digits defined for weekday", "day", day)
+		 // Return empty slice, not an error, unless specifically required
+	 }
+	 return digits, nil
+}
+
+// GetDrawByDate retrieves a draw by its specific date
 func (s *DrawServiceImpl) GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error) {
-	 // Implementation using s.drawRepo.FindByDate
+	 // Normalize date to midnight UTC or appropriate timezone if needed
+	 // date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 	 draw, err := s.drawRepo.FindByDate(ctx, date)
 	 if err != nil {
 		 if errors.Is(err, mongo.ErrNoDocuments) {
-			 return nil, errors.New("no draw found for the specified date")
-		 } else {
-			 slog.Error("GetDrawByDate: Failed to find draw by date", "error", err, "date", date)
-			 return nil, fmt.Errorf("error retrieving draw: %w", err)
+			 slog.Info("No draw found for date", "date", date)
+			 return nil, fmt.Errorf("no draw found for date %s", date.Format("2006-01-02"))
 		 }
+		 slog.Error("Failed to get draw by date", "error", err, "date", date)
+		 return nil, fmt.Errorf("failed to retrieve draw for date %s: %w", date.Format("2006-01-02"), err)
 	 }
 	 return draw, nil
 }
 
-// GetDefaultDigitsForDay returns default eligible digits for a given weekday
-// Note: Moved implementation to utils package, this just calls it.
-func (s *DrawServiceImpl) GetDefaultDigitsForDay(ctx context.Context, day time.Weekday) ([]int, error) {
-	 // No context needed as it's a pure function
-	 return utils.GetDefaultEligibleDigits(day), nil // Return nil error
+// GetDrawByID retrieves a draw by its ID
+func (s *DrawServiceImpl) GetDrawByID(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error) {
+	 slog.Info("Fetching draw by ID", "drawId", drawID)
+	 draw, err := s.drawRepo.FindByID(ctx, drawID)
+	 if err != nil {
+		 if errors.Is(err, mongo.ErrNoDocuments) {
+			 slog.Warn("Draw not found by ID", "drawId", drawID)
+			 return nil, fmt.Errorf("draw with ID %s not found", drawID.Hex())
+		 }
+		 slog.Error("Failed to fetch draw by ID", "error", err, "drawId", drawID)
+		 return nil, fmt.Errorf("failed to fetch draw by ID: %w", err)
+	 }
+	 return draw, nil
 }
 
-// --- Helper Functions (Internal to Draw Service) ---
+
+// GetJackpotStatus retrieves the current jackpot status
+func (s *DrawServiceImpl) GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error) {
+	 slog.Info("Fetching current jackpot status")
+	 now := time.Now()
+	 status := &models.JackpotStatus{
+		 LastUpdatedAt: now,
+	 }
+
+	 // 1. Find the latest completed Saturday draw
+	 latestSaturdayDraw, err := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", []string{string(models.DrawStatusCompleted)})
+	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		 slog.Error("GetJackpotStatus: Failed to find latest completed Saturday draw", "error", err)
+		 return nil, fmt.Errorf("failed to find latest completed Saturday draw: %w", err)
+	 }
+
+	 // 2. If a draw is found, get its details and winner
+	 if latestSaturdayDraw != nil {
+		 status.LastDrawDate = latestSaturdayDraw.DrawDate
+		 // Find the jackpot winner for that draw
+		 winners, findWinnerErr := s.winnerRepo.FindByDrawIDAndCategory(ctx, latestSaturdayDraw.ID, models.JackpotCategory)
+		 if findWinnerErr != nil && !errors.Is(findWinnerErr, mongo.ErrNoDocuments) {
+			 slog.Error("GetJackpotStatus: Failed to find jackpot winner for last draw", "error", findWinnerErr, "drawId", latestSaturdayDraw.ID)
+			 // Continue, but status will lack winner info
+		 } else if len(winners) > 0 {
+			 // Assuming only one jackpot winner per draw
+			 status.LastWinnerMSISDN = winners[0].MSISDN
+			 status.LastWinAmount = winners[0].PrizeAmount
+		 }
+	 }
+
+	 // 3. Find pending rollovers effective today
+	 pendingRollovers, err := s.jackpotRolloverRepo.FindPendingRollovers(ctx, now)
+	 accumulatedRollover := 0.0
+	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		 slog.Error("GetJackpotStatus: Failed to find pending rollovers", "error", err)
+		 // Continue, but current amount might be inaccurate
+	 } else if err == nil {
+		 for _, rollover := range pendingRollovers {
+			 accumulatedRollover += rollover.RolloverAmount
+		 }
+	 }
+
+	 // 4. Get base jackpot amount from config (assuming Saturday for current status)
+	 baseJackpotKey := "base_jackpot_SATURDAY"
+	 baseJackpotConfig, err := s.systemConfigRepo.FindByKey(ctx, baseJackpotKey)
+	 baseJackpotAmount := 0.0
+	 if err != nil {
+		 slog.Error("GetJackpotStatus: Failed to fetch base jackpot config", "error", err, "key", baseJackpotKey)
+		 // Continue, but current amount might be inaccurate
+	 } else {
+		 amount, ok := baseJackpotConfig.Value.(float64)
+		 if !ok {
+			 slog.Error("GetJackpotStatus: Invalid base jackpot amount format in config", "key", baseJackpotKey, "valueType", fmt.Sprintf("%T", baseJackpotConfig.Value))
+			 // Continue, but current amount might be inaccurate
+		 } else {
+			 baseJackpotAmount = amount
+		 }
+	 }
+
+	 // 5. Calculate current jackpot amount
+	 status.CurrentAmount = baseJackpotAmount + accumulatedRollover
+
+	 // 6. Find the next scheduled draw date (any type)
+	 nextDraw, err := s.drawRepo.FindNextScheduledDraw(ctx, now)
+	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		 slog.Error("GetJackpotStatus: Failed to find next scheduled draw", "error", err)
+		 // Continue, but status will lack next draw date
+	 } else if nextDraw != nil {
+		 status.NextDrawDate = nextDraw.DrawDate
+	 }
+
+	 slog.Info("Successfully fetched jackpot status", "currentAmount", status.CurrentAmount, "lastDrawDate", status.LastDrawDate, "nextDrawDate", status.NextDrawDate)
+	 return status, nil
+}
+
+// --- Utility functions specific to DrawService ---
+
 
 // createWeightedPool creates a slice where each user is repeated based on their points
 func createWeightedPool(users []*models.User) []*models.User {
@@ -701,6 +715,60 @@ func maskMsisdn(msisdn string) string {
 	 return prefix + maskedPart + suffix
 }
 
+// AllocatePointsForTopup calculates points for a top-up and updates user points and transaction log.
+// This function now resides in DrawService as it's closely tied to draw eligibility/weighting.
+func (s *DrawServiceImpl) AllocatePointsForTopup(ctx context.Context, userID primitive.ObjectID, amount float64, transactionTime time.Time) (int, error) {
+	 // 1. Calculate points based on amount (centralized logic)
+	 pointsToAdd := calculatePoints(amount)
+	 if pointsToAdd <= 0 {
+		 slog.Info("No points awarded for top-up amount", "userId", userID, "amount", amount)
+		 return 0, nil // Not an error, just no points awarded
+	 }
 
+	 // 2. Fetch the user to get current points and MSISDN
+	 user, err := s.userRepo.FindByID(ctx, userID)
+	 if err != nil {
+		 slog.Error("AllocatePointsForTopup: Failed to find user", "error", err, "userId", userID)
+		 return 0, fmt.Errorf("failed to find user %s for point allocation: %w", userID.Hex(), err)
+	 }
+
+	 // 3. Create Point Transaction Record
+	 transaction := &models.PointTransaction{
+		 UserID:             user.ID,
+		 MSISDN:             user.MSISDN, // Get MSISDN from user object
+		 TopupAmount:        amount,
+		 PointsAwarded:      pointsToAdd,
+		 TransactionTimestamp: transactionTime,
+		 CreatedAt:          time.Now(),
+		 // Removed undefined fields: TransactionType, Description
+	 }
+	 err = s.pointTransactionRepo.Create(ctx, transaction)
+	 if err != nil {
+		 slog.Error("AllocatePointsForTopup: Failed to create point transaction record", "error", err, "userId", userID)
+		 // Decide if this should prevent point update. For now, log and continue.
+	 }
+
+	 // 4. Update User's Points
+	 err = s.userRepo.IncrementPoints(ctx, user.ID, pointsToAdd)
+	 if err != nil {
+		 slog.Error("AllocatePointsForTopup: Failed to increment user points", "error", err, "userId", userID, "pointsToAdd", pointsToAdd)
+		 // Attempt to rollback transaction? Or just log? For now, log the inconsistency.
+		 return 0, fmt.Errorf("failed to update user points for %s: %w", userID.Hex(), err)
+	 }
+
+	 slog.Info("Points allocated successfully", "userId", userID, "pointsAdded", pointsToAdd, "newTotalPoints", user.Points+pointsToAdd)
+	 return pointsToAdd, nil
+}
+
+// calculatePoints determines points based on top-up amount.
+// Centralized logic for point calculation.
+func calculatePoints(amount float64) int {
+	 if amount >= 1000 {
+		 return 10 // 10 points for N1000 or more
+	 }
+	 // 1 point for every N100
+	 points := int(amount / 100)
+	 return points
+}
 
 
