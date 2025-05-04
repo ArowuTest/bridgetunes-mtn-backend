@@ -357,7 +357,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 					 PrizeCategory: prize.Category,
 					 PrizeAmount:  prize.Amount,
 					 WinDate:      draw.DrawDate, // Use DrawDate as WinDate
-					 Status:       models.WinnerStatusPending, // Or determine appropriate initial status
+					 ClaimStatus:  models.ClaimStatusPending, // Use ClaimStatus
 					 CreatedAt:    time.Now(),
 					 UpdatedAt:    time.Now(),
 				 }
@@ -393,7 +393,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 				 PrizeCategory: models.JackpotCategory,
 				 PrizeAmount:  draw.CalculatedJackpotAmount, // Use calculated amount
 				 WinDate:      draw.DrawDate,
-				 Status:       models.WinnerStatusPending, // Or Validated? Needs clarification
+				 ClaimStatus:  models.ClaimStatusPending, // Use ClaimStatus
 				 CreatedAt:    time.Now(),
 				 UpdatedAt:    time.Now(),
 			 }
@@ -418,7 +418,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 			 PrizeCategory: models.JackpotCategory,
 			 PrizeAmount:  draw.CalculatedJackpotAmount,
 			 WinDate:      draw.DrawDate,
-			 Status:       models.WinnerStatusPending,
+			 ClaimStatus:  models.ClaimStatusPending,
 			 CreatedAt:    time.Now(),
 			 UpdatedAt:    time.Now(),
 		 }
@@ -497,7 +497,7 @@ func (s *DrawServiceImpl) GetJackpotStatus(ctx context.Context) (*models.Jackpot
 	 now := time.Now()
 
 	 // 1. Find the latest completed Saturday draw
-	 latestSaturdayDraw, err := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", []string{string(models.DrawStatusCompleted)})
+	 latestSaturdayDraw, err := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", models.DrawStatusCompleted)
 	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		 slog.Error("GetJackpotStatus: Failed to find latest completed Saturday draw", "error", err)
 		 return nil, fmt.Errorf("failed to query latest Saturday draw: %w", err)
@@ -628,7 +628,7 @@ func (s *DrawServiceImpl) GetDrawByDate(ctx context.Context, date time.Time) (*m
 
 // GetDefaultDigitsForDay returns default eligible digits for a given weekday
 // Note: Moved implementation to utils package, this just calls it.
-func (s *DrawServiceImpl) GetDefaultDigitsForDay(day time.Weekday) ([]int, error) {
+func (s *DrawServiceImpl) GetDefaultDigitsForDay(ctx context.Context, day time.Weekday) ([]int, error) {
 	 // No context needed as it's a pure function
 	 return utils.GetDefaultEligibleDigits(day), nil // Return nil error
 }
@@ -700,7 +700,6 @@ func maskMsisdn(msisdn string) string {
 	 maskedPart := strings.Repeat("*", len(msisdn)-7)
 	 return prefix + maskedPart + suffix
 }
-
 
 
 
