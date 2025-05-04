@@ -497,7 +497,7 @@ func (s *DrawServiceImpl) GetJackpotStatus(ctx context.Context) (*models.Jackpot
 	 now := time.Now()
 
 	 // 1. Find the latest completed Saturday draw
-	 latestSaturdayDraw, err := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", models.DrawStatusCompleted)
+	 latestSaturdayDraw, err := s.drawRepo.FindLatestDrawByTypeAndStatus(ctx, "SATURDAY", []string{string(models.DrawStatusCompleted)})
 	 if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		 slog.Error("GetJackpotStatus: Failed to find latest completed Saturday draw", "error", err)
 		 return nil, fmt.Errorf("failed to query latest Saturday draw: %w", err)
