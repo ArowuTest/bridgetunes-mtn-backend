@@ -10,7 +10,7 @@ import (
 
 // DrawService defines the interface for draw-related operations
 type DrawService interface {
-	// GetDrawConfig(ctx context.Context, date time.Time) (map[string]interface{}, error) // Example, might not be needed
+	GetDrawConfig(ctx context.Context) (map[string]interface{}, error) // Added based on handler usage
 	GetPrizeStructure(ctx context.Context, drawType string) ([]models.Prize, error) // Updated return type
 	UpdatePrizeStructure(ctx context.Context, drawType string, structure []models.Prize) error // Updated param type
 	ScheduleDraw(ctx context.Context, drawDate time.Time, drawType string, eligibleDigits []int, useDefaultDigits bool) (*models.Draw, error)
@@ -18,7 +18,7 @@ type DrawService interface {
 	GetDrawByID(ctx context.Context, drawID primitive.ObjectID) (*models.Draw, error) // Ensure this is implemented
 	GetWinnersByDrawID(ctx context.Context, drawID primitive.ObjectID) ([]*models.Winner, error)
 	GetDraws(ctx context.Context, startDate, endDate time.Time) ([]*models.Draw, error)
-	// GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) // Example, might need specific model
+	GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) // Added based on handler usage
 	GetDefaultDigitsForDay(ctx context.Context, dayOfWeek time.Weekday) ([]int, error) // Added based on handler, updated return type
 	GetDrawByDate(ctx context.Context, date time.Time) (*models.Draw, error)    // Added based on handler
 	GetJackpotStatus(ctx context.Context) (*models.JackpotStatus, error)      // Added for build error
@@ -78,6 +78,5 @@ type NotificationService interface {
 	GetCampaignCount(ctx context.Context) (int64, error)
 	GetTemplateCount(ctx context.Context) (int64, error)
 }
-
 
 
