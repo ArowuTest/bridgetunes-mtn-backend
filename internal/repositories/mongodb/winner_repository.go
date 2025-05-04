@@ -203,3 +203,26 @@ func (r *WinnerRepository) FindAll(ctx context.Context) ([]*models.Winner, error
 }
 
 
+
+// FindByUserID finds all wins for a specific user ID.
+// Assumes Winner model has a UserID field (primitive.ObjectID).
+func (r *WinnerRepository) FindByUserID(ctx context.Context, userID primitive.ObjectID) ([]*models.Winner, error) {
+	filter := bson.M{"userId": userID}
+	 opts := options.Find().SetSort(bson.M{"winDate": -1}) // Sort by win date descending
+	 cursor, err := r.collection.Find(ctx, filter, opts)
+	 if err != nil {
+		 return nil, fmt.Errorf("error finding winners by user ID %s: %w", userID.Hex(), err)
+	}
+	 defer cursor.Close(ctx)
+
+	 var winners []*models.Winner
+	 if err := cursor.All(ctx, &winners); err != nil {
+		 return nil, fmt.Errorf("error decoding winners for user ID %s: %w", userID.Hex(), err)
+	}
+	 if winners == nil {
+		 winners = []*models.Winner{}
+	 }
+	 return winners, nil
+}
+
+
