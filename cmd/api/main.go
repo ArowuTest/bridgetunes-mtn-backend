@@ -74,10 +74,10 @@ func main() {
 	var jackpotRolloverRepo repositories.JackpotRolloverRepository = mongorepo.NewJackpotRolloverRepository(db)
 
 	// Initialize External Clients
-	 mtnClient := mtnapi.NewClient(cfg.MTN.BaseURL, cfg.MTN.APIKey, cfg.MTN.APISecret, cfg.MTN.MockAPI)
-	
+	// mtnClient := mtnapi.NewClient(cfg.MTN.BaseURL, cfg.MTN.APIKey, cfg.MTN.APISecret, cfg.MTN.MockAPI) // Commented out - Currently unused
+
 	// Initialize SMS Gateways
-	 var mtnGateway smsgateway.Gateway
+	 var mtnGateway smsgateway.Gatewayy
 	 var kodobeGateway smsgateway.Gateway
 	 if cfg.SMS.MockSMSGateway {
 	 	mtnGateway = smsgateway.NewMockGateway("MTN_Mock")
@@ -173,5 +173,6 @@ func main() {
 
 	log.Println("Server exiting")
 }
+
 
 
