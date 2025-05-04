@@ -772,3 +772,86 @@ func calculatePoints(amount float64) int {
 
 
 
+// GetDrawConfig retrieves draw-related configuration (Placeholder Implementation)
+// TODO: Implement actual logic to fetch relevant config keys (e.g., prize structures, base jackpots)
+func (s *DrawServiceImpl) GetDrawConfig(ctx context.Context) (map[string]interface{}, error) {
+	 slog.Warn("GetDrawConfig: Placeholder implementation called")
+	 // Example: Fetch base jackpot amounts and prize structures
+	 config := make(map[string]interface{})
+
+	 dailyJackpotConfig, err := s.systemConfigRepo.FindByKey(ctx, "base_jackpot_DAILY")
+	 if err == nil {
+		 config["base_jackpot_DAILY"] = dailyJackpotConfig.Value
+	 } else if !errors.Is(err, mongo.ErrNoDocuments) {
+		 slog.Error("GetDrawConfig: Failed to fetch daily base jackpot", "error", err)
+		 // Decide if this error is fatal or just log
+	 }
+
+	 saturdayJackpotConfig, err := s.systemConfigRepo.FindByKey(ctx, "base_jackpot_SATURDAY")
+	 if err == nil {
+		 config["base_jackpot_SATURDAY"] = saturdayJackpotConfig.Value
+	 } else if !errors.Is(err, mongo.ErrNoDocuments) {
+		 slog.Error("GetDrawConfig: Failed to fetch saturday base jackpot", "error", err)
+	 }
+
+	 // Fetch prize structures (assuming stored under keys like "prize_structure_DAILY")
+	 dailyPrizes, err := s.GetPrizeStructure(ctx, "DAILY")
+	 if err == nil {
+		 config["prize_structure_DAILY"] = dailyPrizes
+	 } else {
+		 slog.Error("GetDrawConfig: Failed to fetch daily prize structure", "error", err)
+	 }
+
+	 saturdayPrizes, err := s.GetPrizeStructure(ctx, "SATURDAY")
+	 if err == nil {
+		 config["prize_structure_SATURDAY"] = saturdayPrizes
+	 } else {
+		 slog.Error("GetDrawConfig: Failed to fetch saturday prize structure", "error", err)
+	 }
+
+	 // Add other relevant configs
+
+	 return config, nil // Returning nil error for placeholder
+}
+
+// GetJackpotHistory retrieves historical jackpot information (Placeholder Implementation)
+// TODO: Implement actual logic to query draws and format history
+func (s *DrawServiceImpl) GetJackpotHistory(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error) {
+	 slog.Warn("GetJackpotHistory: Placeholder implementation called")
+	 // Example: Fetch completed draws in the range and extract jackpot info
+	 draws, err := s.drawRepo.FindByDateRangeAndStatus(ctx, startDate, endDate, []string{string(models.DrawStatusCompleted)})
+	 if err != nil {
+		 slog.Error("GetJackpotHistory: Failed to fetch completed draws", "error", err, "startDate", startDate, "endDate", endDate)
+		 return nil, fmt.Errorf("failed to retrieve draw history: %w", err)
+	 }
+
+	 history := make([]map[string]interface{}, 0, len(draws))
+	 for _, draw := range draws {
+		 // Only include draws that had a jackpot prize defined
+		 hasJackpot := false
+		 for _, p := range draw.Prizes {
+			 if p.Category == models.JackpotCategory {
+				 hasJackpot = true
+				 break
+			 }
+		 }
+		 if !hasJackpot {
+			 continue
+		 }
+
+		 entry := map[string]interface{}{
+			 "drawDate":                draw.DrawDate,
+			 "drawType":                draw.DrawType,
+			 "calculatedJackpotAmount": draw.CalculatedJackpotAmount,
+			 "winnerMsisdn":          draw.JackpotWinnerMsisdn, // Might be empty if rollover
+			 "validationStatus":      draw.JackpotWinnerValidationStatus,
+			 "rolloverExecuted":        draw.RolloverExecuted,
+		 }
+		 history = append(history, entry)
+	 }
+
+	 return history, nil
+}
+
+
+
