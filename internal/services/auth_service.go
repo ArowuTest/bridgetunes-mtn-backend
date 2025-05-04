@@ -72,16 +72,20 @@ func (s *authService) Register(ctx context.Context, req *models.RegisterRequest)
 	}
 
 	// Save admin user using AdminUserRepository
-	newAdminUser, err := s.adminUserRepo.Create(ctx, adminUser)
+	// Corrected line 75: Create only returns an error
+	 err = s.adminUserRepo.Create(ctx, adminUser)
 	 if err != nil {
 	 	log.Printf("[ERROR] Register: Failed to create admin user %s: %v", req.Email, err)
 	 	return nil, fmt.Errorf("failed to create admin user: %w", err)
 	 }
-	log.Printf("[DEBUG] Register: Admin user %s created successfully with ID: %s", req.Email, newAdminUser.ID.Hex())
+	// Since Create doesn't return the created user, we can't log the ID here directly.
+	// We might need to adjust Create or fetch the user again if the ID is needed immediately.
+	log.Printf("[DEBUG] Register: Admin user %s creation initiated successfully.", req.Email)
 
 	// Don't return password hash
-	newAdminUser.Password = ""
-	return newAdminUser, nil
+	adminUser.Password = ""
+	// Return the user object we attempted to create (without the ID from DB yet)
+	return adminUser, nil
 }
 
 // Login handles admin user login
