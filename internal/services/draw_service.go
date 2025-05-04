@@ -250,7 +250,7 @@ func (s *DrawServiceImpl) ExecuteDraw(ctx context.Context, drawID primitive.Obje
 		 draw.ExecutionLog = append(draw.ExecutionLog, fmt.Sprintf("Potential Jackpot Winner Selected (Weighted): %s (Points: %d)", maskMsisdn(potentialJackpotWinner.MSISDN), potentialJackpotWinner.Points))
 	 } else {
 		 draw.ExecutionLog = append(draw.ExecutionLog, "Pool A is empty, cannot select Jackpot Winner.")
-		 draw.JackpotWinnerValidationStatus = models.JackpotValidationNoParticipants // Use defined constant
+		 draw.JackpotWinnerValidationStatus = models.JackpotValidationNoParticipantsStatus // Use renamed constant
 	 }
 
 	 // 6. Validate Jackpot Winner & Handle Rollover
