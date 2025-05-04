@@ -17,7 +17,6 @@ import (
 	
 	// Implementation packages
 	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/mongodb" // MongoDB client helper
-	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/mtnapi" // MTN API client
 	"github.com/ArowuTest/bridgetunes-mtn-backend/pkg/smsgateway" // SMS Gateway implementations
 	
 	// Import the specific repository implementation package
@@ -60,12 +59,12 @@ func main() {
 	// Initialize ALL Repositories using the implementation package
 	var userRepo repositories.UserRepository = mongorepo.NewUserRepository(db)
 	var drawRepo repositories.DrawRepository = mongorepo.NewDrawRepository(db)
-	var topupRepo repositories.TopupRepository = mongorepo.NewTopupRepository(db)
-	var notificationRepo repositories.NotificationRepository = mongorepo.NewNotificationRepository(db)
+	// var topupRepo repositories.TopupRepository = mongorepo.NewTopupRepository(db) // Commented out - Unused
+	// var notificationRepo repositories.NotificationRepository = mongorepo.NewNotificationRepository(db) // Commented out - Unused
 	var adminUserRepo repositories.AdminUserRepository = mongorepo.NewAdminUserRepository(db)
 	var winnerRepo repositories.WinnerRepository = mongorepo.NewWinnerRepository(db) // Added Winner Repo
-	var templateRepo repositories.TemplateRepository = mongorepo.NewTemplateRepository(db) // Added Template Repo
-	var campaignRepo repositories.CampaignRepository = mongorepo.NewCampaignRepository(db) // Added Campaign Repo
+	// var templateRepo repositories.TemplateRepository = mongorepo.NewTemplateRepository(db) // Commented out - Unused
+	// var campaignRepo repositories.CampaignRepository = mongorepo.NewCampaignRepository(db) // Commented out - Unused
 	// Initialize Blacklist and SystemConfig repositories
 	var blacklistRepo repositories.BlacklistRepository = mongorepo.NewBlacklistRepository(db) // Uncommented
 	var systemConfigRepo repositories.SystemConfigRepository = mongorepo.NewSystemConfigRepository(db) // Uncommented
@@ -77,7 +76,7 @@ func main() {
 	// mtnClient := mtnapi.NewClient(cfg.MTN.BaseURL, cfg.MTN.APIKey, cfg.MTN.APISecret, cfg.MTN.MockAPI) // Commented out - Currently unused
 
 	// Initialize SMS Gateways
-	 var mtnGateway smsgateway.Gatewayy
+	 var mtnGateway smsgateway.Gateway // Corrected typo
 	 var kodobeGateway smsgateway.Gateway
 	 if cfg.SMS.MockSMSGateway {
 	 	mtnGateway = smsgateway.NewMockGateway("MTN_Mock")
@@ -173,6 +172,5 @@ func main() {
 
 	log.Println("Server exiting")
 }
-
 
 
