@@ -26,13 +26,11 @@ func NewAdminUserRepository(db *mongo.Database) repositories.AdminUserRepository
 }
 
 // Create inserts a new admin user into the database
-func (r *adminUserRepository) Create(ctx context.Context, adminUser *models.AdminUser) (*models.AdminUser, error) {
+// Corrected signature to match the interface: returns only error
+func (r *adminUserRepository) Create(ctx context.Context, adminUser *models.AdminUser) error {
 	adminUser.ID = primitive.NewObjectID() // Generate a new ID
 	_, err := r.collection.InsertOne(ctx, adminUser)
-	 if err != nil {
-	 	return nil, err
-	 }
-	return adminUser, nil
+	return err // Return only the error
 }
 
 // FindByEmail finds an admin user by their email address
@@ -64,5 +62,33 @@ func (r *adminUserRepository) FindByID(ctx context.Context, id primitive.ObjectI
 	return &adminUser, nil
 }
 
-// Add other methods like Update, Delete, FindAll as needed based on the interface definition
+// Update updates an existing admin user
+func (r *adminUserRepository) Update(ctx context.Context, adminUser *models.AdminUser) error {
+	filter := bson.M{"_id": adminUser.ID}
+	update := bson.M{"$set": adminUser}
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+// Delete removes an admin user by ID
+func (r *adminUserRepository) Delete(ctx context.Context, id primitive.ObjectID) error {
+	filter := bson.M{"_id": id}
+	_, err := r.collection.DeleteOne(ctx, filter)
+	return err
+}
+
+// FindAll retrieves all admin users
+func (r *adminUserRepository) FindAll(ctx context.Context) ([]*models.AdminUser, error) {
+	var adminUsers []*models.AdminUser
+	cursor, err := r.collection.Find(ctx, bson.M{})
+	 if err != nil {
+	 	return nil, err
+	 }
+	defer cursor.Close(ctx)
+	 if err = cursor.All(ctx, &adminUsers); err != nil {
+	 	return nil, err
+	 }
+	return adminUsers, nil
+}
+
 
