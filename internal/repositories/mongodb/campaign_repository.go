@@ -64,8 +64,8 @@ func (r *CampaignRepository) FindByStatus(ctx context.Context, status string, pa
 }
 
 // FindAll finds all campaigns with pagination
-// Returns slice of values as required by interface
-func (r *CampaignRepository) FindAll(ctx context.Context, page, limit int) ([]models.Campaign, error) {
+// Returns slice of pointers as required by interface
+func (r *CampaignRepository) FindAll(ctx context.Context, page, limit int) ([]*models.Campaign, error) {
 	 opts := options.Find().
 		 SetSkip(int64((page - 1) * limit)).
 		 SetLimit(int64(limit)).
@@ -77,14 +77,14 @@ func (r *CampaignRepository) FindAll(ctx context.Context, page, limit int) ([]mo
 	}
 	 defer cursor.Close(ctx)
 
-	 var campaigns []models.Campaign // Value slice
+	 var campaigns []*models.Campaign // Changed to pointer slice
 	 if err := cursor.All(ctx, &campaigns); err != nil {
 		 return nil, err
 	}
 
 	 // Ensure an empty slice is returned instead of nil if no campaigns found
 	 if campaigns == nil {
-	 	campaigns = []models.Campaign{}
+	 	campaigns = []*models.Campaign{}
 	 }
 
 	 return campaigns, nil
