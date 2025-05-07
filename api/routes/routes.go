@@ -78,6 +78,7 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 		{
 			 auth.POST("/login", deps.AuthHandler.Login)
 			 auth.POST("/register", deps.AuthHandler.Register) // Assuming register handler exists
+			 auth.POST("/opt-in", deps.UserHandler.OptIn)
 			// Add other public auth routes like refresh token if needed
 		}
 

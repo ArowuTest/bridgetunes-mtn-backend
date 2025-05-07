@@ -25,25 +25,6 @@ type DrawService interface {
 	AllocatePointsForTopup(ctx context.Context, userID primitive.ObjectID, amount float64, transactionTime time.Time) (int, error) // Added for point allocation logic
 }
 
-// UserService defines the interface for user-related operations (Add other service interfaces as needed)
-type UserService interface {
-	// Define user service methods here
-	// Example (based on LegacyUserService):
-	GetUserByID(ctx context.Context, id primitive.ObjectID) (*models.User, error)
-	GetUserByMSISDN(ctx context.Context, msisdn string) (*models.User, error)
-	GetAllUsers(ctx context.Context, page, limit int) ([]*models.User, error)
-	GetUsersByOptInStatus(ctx context.Context, optInStatus bool, page, limit int) ([]*models.User, error)
-	GetUsersByEligibleDigits(ctx context.Context, digits []int, optInStatus bool) ([]*models.User, error)
-	CreateUser(ctx context.Context, user *models.User) error
-	UpdateUser(ctx context.Context, user *models.User) error
-	DeleteUser(ctx context.Context, id primitive.ObjectID) error
-	OptIn(ctx context.Context, msisdn string, channel string) error
-	OptOut(ctx context.Context, msisdn string) error
-	AddPoints(ctx context.Context, msisdn string, points int) error
-	GetUserCount(ctx context.Context) (int64, error)
-	// AllocatePointsForTopup(ctx context.Context, msisdn string, amount float64) error // Removed - Logic moved to DrawService
-}
-
 // TopupService defines the interface for topup-related operations
 type TopupService interface {
 	// Define topup service methods here
