@@ -18,6 +18,7 @@ type HandlerDependencies struct {
 	DrawHandler        *handlers.DrawHandler // Assuming DrawHandlerEnhanced is now DrawHandler or similar
 	TopupHandler       *handlers.TopupHandler
 	NotificationHandler *handlers.NotificationHandler
+	EventHandler 		*handlers.EventHandler
 	// Add other handlers as needed
 }
 
@@ -93,6 +94,10 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 		 users := protected.Group("/users")
 		{
 			 users.GET("/me", deps.UserHandler.GetMe) // Example protected user route
+			 users.GET("", deps.UserHandler.GetAllUsers)
+			 users.GET("/:id", deps.UserHandler.GetUserByID)
+			 users.GET("msisdn/:msisdn", deps.UserHandler.GetUserByMSISDN)
+			 users.POST("opt-out", deps.UserHandler.OptOut)
 			// Add other protected user routes
 		}
 
@@ -132,6 +137,16 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 		 dashboard := protected.Group("/dashboard")
 		{
 			 dashboard.GET("/stats", deps.UserHandler.GetDashboardStats) // Add the dashboard stats route
+		}
+
+		// Events route
+		 events := protected.Group("/events")
+		{
+			 events.GET("", deps.EventHandler.ListEvents)
+			 events.GET("/:id", deps.EventHandler.GetEvent)
+			 events.POST("", deps.EventHandler.CreateEvent)
+			 events.PUT("/:id", deps.EventHandler.UpdateEvent)
+			 events.DELETE("/:id", deps.EventHandler.DeleteEvent)
 		}
 	}
 
