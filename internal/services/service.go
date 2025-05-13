@@ -60,4 +60,11 @@ type NotificationService interface {
 	GetTemplateCount(ctx context.Context) (int64, error)
 }
 
+// SystemSettingsService defines the interface for system settings operations
+type SystemSettingsService interface {
+	GetSettings(ctx context.Context) (*models.SystemSettings, error)
+	UpdateSettings(ctx context.Context, settings *models.SystemSettings) error
+	UpdateSMSGateway(ctx context.Context, gateway string, updatedBy string) error
+}
+
 

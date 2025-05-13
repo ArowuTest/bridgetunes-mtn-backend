@@ -95,6 +95,14 @@ type AdminUserRepository interface {
 	FindAll(ctx context.Context) ([]*models.AdminUser, error)
 }
 
+// EventRepository defines the interface for event data operations
+type EventRepository interface {
+	Create(ctx context.Context, event *models.Event) error
+	FindByID(ctx context.Context, id primitive.ObjectID) (*models.Event, error)
+	Update(ctx context.Context, event *models.Event) error
+	Delete(ctx context.Context, id primitive.ObjectID) error
+	FindAll(ctx context.Context, page, limit int, status models.EventStatus, filter string) ([]*models.Event, error)
+}
 
 // TopupRepository defines the interface for topup data operations
 type TopupRepository interface {
@@ -138,5 +146,9 @@ type CampaignRepository interface {
 	Count(ctx context.Context) (int64, error)
 }
 
-
-
+// SystemSettingsRepository defines the interface for system settings operations
+type SystemSettingsRepository interface {
+	GetSettings(ctx context.Context) (*models.SystemSettings, error)
+	UpdateSettings(ctx context.Context, settings *models.SystemSettings) error
+	UpdateSMSGateway(ctx context.Context, gateway string, updatedBy string) error
+}
