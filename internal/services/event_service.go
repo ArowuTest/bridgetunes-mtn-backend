@@ -15,7 +15,7 @@ type EventServiceInterface interface {
 	GetEvent(ctx context.Context, id primitive.ObjectID) (*models.Event, error)
 	UpdateEvent(ctx context.Context, event *models.Event) error
 	DeleteEvent(ctx context.Context, id primitive.ObjectID) error
-	ListEvents(ctx context.Context, page, limit int) ([]*models.Event, error)
+	ListEvents(ctx context.Context, page, limit int, filter string) ([]*models.Event, error)
 }
 
 type EventService struct {
@@ -42,7 +42,6 @@ func (s *EventService) CreateEvent(ctx context.Context, event *models.Event) err
 	}
 	event.CreatedAt = time.Now()
 	event.UpdatedAt = time.Now()
-
 	return s.eventRepo.Create(ctx, event)
 }
 
@@ -65,6 +64,7 @@ func (s *EventService) DeleteEvent(ctx context.Context, id primitive.ObjectID) e
 	return s.eventRepo.Delete(ctx, id)
 }
 
-func (s *EventService) ListEvents(ctx context.Context, page, limit int) ([]*models.Event, error) {
-	return s.eventRepo.FindAll(ctx, page, limit)
-} 
+func (s *EventService) ListEvents(ctx context.Context, page, limit int, filter string) ([]*models.Event, error) {
+	// Always fetch only active events
+	return s.eventRepo.FindAll(ctx, page, limit, models.EventStatusActive, filter)
+}
