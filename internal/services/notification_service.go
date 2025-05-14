@@ -22,7 +22,8 @@ type LegacyNotificationService struct {
 	userRepo         repositories.UserRepository // Use interface type for dependency
 	mtnGateway       smsgateway.Gateway
 	 kodobeGateway    smsgateway.Gateway
-	defaultGateway   string
+	 uduxGateway    smsgateway.Gateway
+	 settingsRepo     repositories.SystemSettingsRepository
 }
 
 // NewLegacyNotificationService creates a new LegacyNotificationService
@@ -33,7 +34,8 @@ func NewLegacyNotificationService(
 	 userRepo repositories.UserRepository, // Use interface type for dependency
 	 mtnGateway smsgateway.Gateway,
 	 kodobeGateway smsgateway.Gateway,
-	 defaultGateway string,
+	 uduxGateway smsgateway.Gateway,
+	 settingsRepo repositories.SystemSettingsRepository,
 ) *LegacyNotificationService {
 	return &LegacyNotificationService{
 		// notificationRepo: notificationRepo, // Keep commented
@@ -42,7 +44,8 @@ func NewLegacyNotificationService(
 		 userRepo:         userRepo,
 		 mtnGateway:       mtnGateway,
 		 kodobeGateway:    kodobeGateway,
-		 defaultGateway:   defaultGateway,
+		 uduxGateway:      uduxGateway,
+		 settingsRepo:     settingsRepo,
 	}
 }
 
@@ -72,6 +75,12 @@ func (s *LegacyNotificationService) GetNotificationsByStatus(ctx context.Context
 
 // SendSMS sends an SMS notification
 func (s *LegacyNotificationService) SendSMS(ctx context.Context, msisdn, content, notificationType string, campaignID primitive.ObjectID) (*models.Notification, error) {
+	// Get current system settings
+	settings, err := s.settingsRepo.GetSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system settings: %w", err)
+	}
+
 	// Create notification record
 	notification := &models.Notification{
 		MSISDN:     msisdn,
@@ -80,54 +89,59 @@ func (s *LegacyNotificationService) SendSMS(ctx context.Context, msisdn, content
 		Status:     "PENDING", // Start as PENDING
 		SentDate:   time.Time{}, // Set SentDate only on successful send
 		CampaignID: campaignID,
-		Gateway:    s.defaultGateway,
+		Gateway:    settings.SMSGateway,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
+	// log.Print("notification:", notification) //gets here
 
-	// Select gateway
+
+	// Select gateway based on system settings
 	var gateway smsgateway.Gateway
-	 if s.defaultGateway == "MTN" {
-	 	gateway = s.mtnGateway
-	 	notification.Gateway = "MTN"
-	 } else {
-	 	gateway = s.kodobeGateway
-	 	notification.Gateway = "KODOBE"
-	 }
+	switch settings.SMSGateway {
+	case "MTN":
+		gateway = s.mtnGateway
+	case "KODOBE":
+		gateway = s.kodobeGateway
+	case "UDUX":
+		gateway = s.uduxGateway
+	default:
+		gateway = s.uduxGateway
+	}
 
 	// Send SMS
-	 messageID, err := gateway.SendSMS(msisdn, content)
-	 if err != nil {
-	 	// If default gateway fails, try the other one as fallback
-	 	 if s.defaultGateway == "MTN" && s.kodobeGateway != nil {
-	 	 	gateway = s.kodobeGateway
-	 	 	notification.Gateway = "KODOBE"
-	 	 	messageID, err = gateway.SendSMS(msisdn, content)
-	 	 } else if s.defaultGateway != "MTN" && s.mtnGateway != nil {
-	 	 	gateway = s.mtnGateway
-	 	 	notification.Gateway = "MTN"
-	 	 	messageID, err = gateway.SendSMS(msisdn, content)
-	 	 }
+	messageID, err := gateway.SendSMS(msisdn, content)
+	if err != nil {
+		// If default gateway fails, try the other ones as fallback
+		if settings.SMSGateway != "MTN" && s.mtnGateway != nil {
+			gateway = s.mtnGateway
+			notification.Gateway = "MTN"
+			messageID, err = gateway.SendSMS(msisdn, content)
+		}
+		if err != nil && settings.SMSGateway != "KODOBE" && s.kodobeGateway != nil {
+			gateway = s.kodobeGateway
+			notification.Gateway = "KODOBE"
+			messageID, err = gateway.SendSMS(msisdn, content)
+		}
+		if err != nil && settings.SMSGateway != "UDUX" && s.uduxGateway != nil {
+			gateway = s.uduxGateway
+			notification.Gateway = "UDUX"
+			messageID, err = gateway.SendSMS(msisdn, content)
+		}
 
-	 	 // If fallback also fails
-	 	 if err != nil {
-	 	 	notification.Status = "FAILED"
-	 	 	// s.notificationRepo.Create(ctx, notification) // Save failed attempt - Commented out - repo undefined
-	 	 	 return notification, err // Return the failed notification and the error
-	 	 }
-	 }
+		// If all gateways fail
+		if err != nil {
+			notification.Status = "FAILED"
+			return notification, err
+		}
+	}
 
-	// SMS sent successfully (either primary or fallback)
+	// SMS sent successfully
 	notification.MessageID = messageID
 	notification.Status = "SENT"
 	notification.SentDate = time.Now()
-	 // err = s.notificationRepo.Create(ctx, notification) // Save successful attempt - Commented out - repo undefined
-	 // if err != nil {
-	 // 	 // Log error saving notification, but SMS was sent
-	 // 	 return notification, err // Return notification and DB error
-	 // }
 
-	return notification, nil // Return nil error if repo save is commented out
+	return notification, nil
 }
 
 // CreateCampaign creates a new notification campaign
