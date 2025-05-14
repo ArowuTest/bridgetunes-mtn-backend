@@ -8,12 +8,15 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	Server   ServerConfig
-	MongoDB  MongoDBConfig
-	JWT      JWTConfig
-	MTN      MTNConfig
-	SMS      SMSConfig
-	LogLevel string
+	Server        ServerConfig
+	MongoDB       MongoDBConfig
+	JWT           JWTConfig
+	MTN           MTNConfig
+	SMS           SMSConfig
+	LogLevel      string
+	UduxGateway   UduxGatewayConfig
+	KodobeGateway KodobeGatewayConfig
+	MTNGateway    MTNGatewayConfig
 }
 
 // ServerConfig holds server-specific configuration
@@ -37,40 +40,44 @@ type JWTConfig struct {
 
 // MTNConfig holds MTN API-specific configuration
 type MTNConfig struct {
-	BaseURL    string
-	APIKey     string
-	APISecret  string
-	MockAPI    bool
+	BaseURL   string
+	APIKey    string
+	APISecret string
+	MockAPI   bool
 }
 
 // SMSConfig holds SMS gateway-specific configuration
 type SMSConfig struct {
-	MTNGateway      MTNGatewayConfig
-	KodobeGateway   KodobeGatewayConfig
-	DefaultGateway  string
-	MockSMSGateway  bool
+	MTNGateway     MTNGatewayConfig
+	KodobeGateway  KodobeGatewayConfig
+	UduxGateway    UduxGatewayConfig
+	DefaultGateway string
+	MockSMSGateway bool
 }
 
 // MTNGatewayConfig holds MTN SMS gateway-specific configuration
 type MTNGatewayConfig struct {
-	BaseURL    string
-	APIKey     string
-	APISecret  string
+	BaseURL   string
+	APIKey    string
+	APISecret string
 }
 
 // KodobeGatewayConfig holds Kodobe SMS gateway-specific configuration
 type KodobeGatewayConfig struct {
-	BaseURL  string
-	APIKey   string
+	BaseURL string
+	APIKey  string
+}
+
+type UduxGatewayConfig struct {
+	BaseURL    string
+	APISecret  string
+	JWT_SECRET string
 }
 
 // Load loads configuration from environment variables and config files
 func Load() (*Config, error) {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("./config")
 	viper.AutomaticEnv()
+
 	// Use underscore replacement for environment variables (e.g., SERVER_ALLOWED_HOSTS)
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
@@ -91,7 +98,10 @@ func Load() (*Config, error) {
 
 	// Unmarshal configuration
 	var config Config
-	 if err := viper.Unmarshal(&config); err != nil {
+	// Load Udux Gateway config
+	config.UduxGateway.BaseURL = viper.GetString("sms.udux.gateway.base.url")
+	config.UduxGateway.APISecret = viper.GetString("sms.udux.gateway.api.secret")
+	config.UduxGateway.JWT_SECRET = viper.GetString("sms.jwt.secret")
 		return nil, err
 	}
 
@@ -113,16 +123,12 @@ func Load() (*Config, error) {
 func setDefaults() {
 	viper.SetDefault("Server.Port", "4000")
 	// Default only for local development, expect SERVER_ALLOWED_HOSTS env var in deployment
-	viper.SetDefault("Server.AllowedHosts", []string{"http://localhost:3000"}) 
+	viper.SetDefault("Server.AllowedHosts", []string{"http://localhost:3000", "*"})
 	viper.SetDefault("MongoDB.URI", "mongodb+srv://fsanus20111:wXVTvRfaCtcd5W7t@cluster0.llhkakp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 	viper.SetDefault("MongoDB.Database", "bridgetunes")
 	viper.SetDefault("JWT.ExpiresIn", 24*60*60) // 24 hours
 	viper.SetDefault("LogLevel", "info")
 	viper.SetDefault("MTN.MockAPI", true)
 	viper.SetDefault("SMS.DefaultGateway", "mtn")
-	viper.SetDefault("SMS.MockSMSGateway", true)
+	viper.SetDefault("SMS.MockSMSGateway", false)
 }
-
-
-
-

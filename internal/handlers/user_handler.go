@@ -3,13 +3,12 @@ package handlers
 import (
 	"net/http"
 	"strconv"
-	// "time" // Removed unused import
 
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/models"
 	"github.com/ArowuTest/bridgetunes-mtn-backend/internal/services"
+	"github.com/dgrijalva/jwt-go" // Added missing import for JWT
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"github.com/dgrijalva/jwt-go" // Added missing import for JWT
 )
 
 // UserHandler handles user-related HTTP requests
@@ -89,7 +88,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 
 	// Create user
-	 err := h.userService.CreateUser(c, &user)
+	 err := h.userService.CreateUser(c.Request.Context(), &user)
 	 if err != nil {
 		 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user: " + err.Error() })
 		 return

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
@@ -94,14 +93,13 @@ func (h *EventHandler) DeleteEvent(c *gin.Context) {
 func (h *EventHandler) ListEvents(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	log.Println("yam?")
+	filter := c.DefaultQuery("filter", "") // Can be "upcoming", "past", "live", or empty for all active events
 
-
-    events, err := h.eventService.ListEvents(c, page, limit)
+	events, err := h.eventService.ListEvents(c, page, limit, filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, events)
-} 
+}

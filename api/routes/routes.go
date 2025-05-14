@@ -13,12 +13,14 @@ import (
 
 // HandlerDependencies holds all the handlers required by the router
 type HandlerDependencies struct {
-	AuthHandler        *handlers.AuthHandler
-	UserHandler        *handlers.UserHandler
-	DrawHandler        *handlers.DrawHandler // Assuming DrawHandlerEnhanced is now DrawHandler or similar
-	TopupHandler       *handlers.TopupHandler
-	NotificationHandler *handlers.NotificationHandler
-	EventHandler 		*handlers.EventHandler
+	AuthHandler           *handlers.AuthHandler
+	UserHandler           *handlers.UserHandler
+	DrawHandler           *handlers.DrawHandler // Assuming DrawHandlerEnhanced is now DrawHandler or similar
+	TopupHandler          *handlers.TopupHandler
+	NotificationHandler   *handlers.NotificationHandler
+	EventHandler          *handlers.EventHandler
+	SystemSettingsHandler *handlers.SystemSettingsHandler
+	MomoHandler 		  *handlers.MoMoHandler
 	// Add other handlers as needed
 }
 
@@ -26,7 +28,7 @@ type HandlerDependencies struct {
 // It now accepts HandlerDependencies to allow for proper dependency injection.
 func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 	// Set Gin mode based on config
-	 if cfg.Server.Env == "production" {
+	if cfg.Server.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
 		gin.SetMode(gin.DebugMode)
@@ -51,7 +53,7 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 		AllowOriginFunc: func(origin string) bool {
 			// Allow requests from configured origins
 			for _, allowedOrigin := range cfg.Server.AllowedHosts {
-				 if strings.EqualFold(allowedOrigin, origin) || allowedOrigin == "*" {
+				if strings.EqualFold(allowedOrigin, origin) || allowedOrigin == "*" {
 					return true
 				}
 			}
@@ -69,17 +71,17 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 
 	// Add a simple handler for the root path ("/")
 	router.GET("/", func(c *gin.Context) {
-		 c.JSON(200, gin.H{"status": "Service is running"})
+		c.JSON(200, gin.H{"status": "Service is running"})
 	})
 
 	// Public routes (no authentication required)
 	public := router.Group("/api/v1")
 	{
-		 auth := public.Group("/auth")
+		auth := public.Group("/auth")
 		{
-			 auth.POST("/login", deps.AuthHandler.Login)
-			 auth.POST("/register", deps.AuthHandler.Register) // Assuming register handler exists
-			 auth.POST("/opt-in", deps.UserHandler.OptIn)
+			auth.POST("/login", deps.AuthHandler.Login)
+			auth.POST("/register", deps.AuthHandler.Register) // Assuming register handler exists
+			auth.POST("/opt-in", deps.UserHandler.OptIn)
 			// Add other public auth routes like refresh token if needed
 		}
 
@@ -91,62 +93,77 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 	protected := router.Group("/api/v1")
 	protected.Use(middleware.JWTAuthMiddleware(cfg)) // Apply JWT authentication middleware
 	{
-		 users := protected.Group("/users")
+		users := protected.Group("/users")
 		{
-			 users.GET("/me", deps.UserHandler.GetMe) // Example protected user route
-			 users.GET("", deps.UserHandler.GetAllUsers)
-			 users.GET("/:id", deps.UserHandler.GetUserByID)
-			 users.GET("msisdn/:msisdn", deps.UserHandler.GetUserByMSISDN)
-			 users.POST("opt-out", deps.UserHandler.OptOut)
+			users.GET("/me", deps.UserHandler.GetMe) // Example protected user route
+			users.GET("", deps.UserHandler.GetAllUsers)
+			users.GET("/:id", deps.UserHandler.GetUserByID)
+			users.GET("msisdn/:msisdn", deps.UserHandler.GetUserByMSISDN)
+			users.POST("opt-out", deps.UserHandler.OptOut)
 			// Add other protected user routes
 		}
 
-		 draws := protected.Group("/draws")
+		draws := protected.Group("/draws")
 		{
-			 draws.POST("", deps.DrawHandler.CreateDraw)
-			 draws.GET("", deps.DrawHandler.GetDraws)
-			 draws.GET("/:id", deps.DrawHandler.GetDrawByID)
-			 draws.PUT("/:id", deps.DrawHandler.UpdateDraw)
-			 draws.DELETE("/:id", deps.DrawHandler.DeleteDraw)
-			 draws.POST("/schedule", deps.DrawHandler.ScheduleDraw)
-			 draws.POST("/execute/:id", deps.DrawHandler.ExecuteDraw)
-			 draws.GET("/winners/:id", deps.DrawHandler.GetWinners)
-			 draws.GET("/date/:date", deps.DrawHandler.GetDrawByDate)
-			 draws.GET("/default-digits/:day", deps.DrawHandler.GetDefaultDigitsForDay)
-			 draws.GET("/config", deps.DrawHandler.GetDrawConfig)
-			 draws.GET("/prize-structure", deps.DrawHandler.GetPrizeStructure)
+			draws.POST("", deps.DrawHandler.CreateDraw)
+			draws.GET("", deps.DrawHandler.GetDraws)
+			draws.GET("/:id", deps.DrawHandler.GetDrawByID)
+			draws.PUT("/:id", deps.DrawHandler.UpdateDraw)
+			draws.DELETE("/:id", deps.DrawHandler.DeleteDraw)
+			draws.POST("/schedule", deps.DrawHandler.ScheduleDraw)
+			draws.POST("/execute/:id", deps.DrawHandler.ExecuteDraw)
+			draws.GET("/winners/:id", deps.DrawHandler.GetWinners)
+			draws.GET("/date/:date", deps.DrawHandler.GetDrawByDate)
+			draws.GET("/default-digits/:day", deps.DrawHandler.GetDefaultDigitsForDay)
+			draws.GET("/config", deps.DrawHandler.GetDrawConfig)
+			draws.GET("/prize-structure", deps.DrawHandler.GetPrizeStructure)
 			// Add other draw routes
 		}
 
-		 topups := protected.Group("/topups")
+		topups := protected.Group("/topups")
 		{
-			 topups.POST("", deps.TopupHandler.CreateTopup)
-			 topups.GET("", deps.TopupHandler.GetTopups)
+			topups.POST("", deps.TopupHandler.CreateTopup)
+			topups.GET("", deps.TopupHandler.GetTopups)
 			// Add other topup routes
 		}
 
-		 notifications := protected.Group("/notifications")
+		notifications := protected.Group("/notifications")
 		{
-			 notifications.GET("", deps.NotificationHandler.GetNotifications) // General notifications endpoint
-			 notifications.GET("/campaigns", deps.NotificationHandler.GetAllCampaigns) // Add route for getting all campaigns
-			 notifications.GET("/templates", deps.NotificationHandler.GetAllTemplates) // Add route for getting all templates
-			 // Add other specific notification routes as needed (e.g., POST /campaigns, POST /templates, GET /campaigns/:id)
+			notifications.GET("", deps.NotificationHandler.GetNotifications)          // General notifications endpoint
+			notifications.GET("/campaigns", deps.NotificationHandler.GetAllCampaigns) // Add route for getting all campaigns
+			notifications.GET("/templates", deps.NotificationHandler.GetAllTemplates) // Add route for getting all templates
+			// Add other specific notification routes as needed (e.g., POST /campaigns, POST /templates, GET /campaigns/:id)
+			notifications.POST("", deps.NotificationHandler.SendSMS) // Add route for getting all templates
 		}
 
 		// Dashboard route
-		 dashboard := protected.Group("/dashboard")
+		dashboard := protected.Group("/dashboard")
 		{
-			 dashboard.GET("/stats", deps.UserHandler.GetDashboardStats) // Add the dashboard stats route
+			dashboard.GET("/stats", deps.UserHandler.GetDashboardStats) // Add the dashboard stats route
 		}
 
 		// Events route
-		 events := protected.Group("/events")
+		events := protected.Group("/events")
 		{
-			 events.GET("", deps.EventHandler.ListEvents)
-			 events.GET("/:id", deps.EventHandler.GetEvent)
-			 events.POST("", deps.EventHandler.CreateEvent)
-			 events.PUT("/:id", deps.EventHandler.UpdateEvent)
-			 events.DELETE("/:id", deps.EventHandler.DeleteEvent)
+			events.GET("", deps.EventHandler.ListEvents)
+			events.GET("/:id", deps.EventHandler.GetEvent)
+			events.POST("", deps.EventHandler.CreateEvent)
+			events.PUT("/:id", deps.EventHandler.UpdateEvent)
+			events.DELETE("/:id", deps.EventHandler.DeleteEvent)
+		}
+
+		// System settings routes
+		settings := protected.Group("/settings")
+		{
+			settings.GET("", deps.SystemSettingsHandler.GetSettings)
+			settings.PUT("", deps.SystemSettingsHandler.UpdateSettings)
+			settings.PUT("/sms-gateway", deps.SystemSettingsHandler.UpdateSMSGateway)
+		}
+
+		// Momo routes
+		momo := protected.Group("/momo")
+		{
+			momo.GET("", deps.MomoHandler.GetBalance)
 		}
 	}
 
@@ -155,11 +172,8 @@ func SetupRouter(cfg *config.Config, deps HandlerDependencies) *gin.Engine {
 
 	// Route for 404 Not Found
 	router.NoRoute(func(c *gin.Context) {
-		 c.JSON(404, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
+		c.JSON(404, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
 	})
 
 	return router
 }
-
-
-

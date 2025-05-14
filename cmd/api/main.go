@@ -72,20 +72,24 @@ func main() {
 	var pointTransactionRepo repositories.PointTransactionRepository = mongorepo.NewPointTransactionRepository(db)
 	var jackpotRolloverRepo repositories.JackpotRolloverRepository = mongorepo.NewJackpotRolloverRepository(db)
 	var eventRepo repositories.EventRepository = mongorepo.NewEventRepository(db)
+	var systemSettingsRepo repositories.SystemSettingsRepository = mongorepo.NewSystemSettingsRepository(db)
 
 	// Initialize External Clients
 	// mtnClient := mtnapi.NewClient(cfg.MTN.BaseURL, cfg.MTN.APIKey, cfg.MTN.APISecret, cfg.MTN.MockAPI) // Commented out - Currently unused
 
 	// Initialize SMS Gateways
-	var mtnGateway smsgateway.Gateway // Corrected typo
+	var uduxGateway smsgateway.Gateway
+	var mtnGateway smsgateway.Gateway
 	var kodobeGateway smsgateway.Gateway
+
 	if cfg.SMS.MockSMSGateway {
+		uduxGateway = smsgateway.NewMockGateway("UDUX_Mock")
 		mtnGateway = smsgateway.NewMockGateway("MTN_Mock")
 		kodobeGateway = smsgateway.NewMockGateway("Kodobe_Mock")
 	} else {
-		// Pass the MockSMS flag (which is false here) to the constructors
-		mtnGateway = smsgateway.NewMTNGateway(cfg.SMS.MTNGateway.BaseURL, cfg.SMS.MTNGateway.APIKey, cfg.SMS.MTNGateway.APISecret, false)
-		kodobeGateway = smsgateway.NewKodobeGateway(cfg.SMS.KodobeGateway.BaseURL, cfg.SMS.KodobeGateway.APIKey, false)
+		uduxGateway = smsgateway.NewUduxGateway(cfg)
+		mtnGateway = smsgateway.NewMTNGateway(cfg, false)
+		kodobeGateway = smsgateway.NewKodobeGateway(cfg, false)
 	}
 
 	// Initialize Services using Legacy constructors with ALL dependencies
@@ -103,9 +107,12 @@ func main() {
 		userRepo, // Corrected: Pass userRepo
 		mtnGateway,
 		kodobeGateway,
-		cfg.SMS.DefaultGateway,
+		uduxGateway,
+		systemSettingsRepo,
 	)
+	systemSettingsService := services.NewSystemSettingsService(systemSettingsRepo)
 	eventServiceInstance := services.NewEventService(eventRepo)
+	momoServiceInstance := services.NewMoMoService("https://sandbox.momodeveloper.mtn.com/disbursement/token")
 
 	// Store services using interface types if handlers expect interfaces (recommended)
 	var userService services.UserService = legacyUserService
@@ -113,6 +120,8 @@ func main() {
 	var topupService services.TopupService = topupServiceInstance // Use the new instance
 	var notificationService services.NotificationService = legacyNotificationService
 	var eventService services.EventServiceInterface = eventServiceInstance
+	var settingsService services.SystemSettingsService = systemSettingsService
+	var momoService services.MoMoService = momoServiceInstance
 
 	// Initialize Handlers (Assuming handlers accept interface types)
 	authHandler := handlers.NewAuthHandler(authService)
@@ -121,6 +130,8 @@ func main() {
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
 	userHandler := handlers.NewUserHandler(userService)
 	eventHandler := handlers.NewEventHandler(eventService)
+	systemSettingsHandler := handlers.NewSystemSettingsHandler(settingsService)
+	momoHandler := handlers.NewMoMoHandler(momoService)
 	// Add other handlers as needed
 
 	// Create Handler Dependencies struct (Assuming it uses interface types)
@@ -131,6 +142,8 @@ func main() {
 		TopupHandler:        topupHandler,
 		NotificationHandler: notificationHandler,
 		EventHandler:        eventHandler,
+		SystemSettingsHandler: systemSettingsHandler,
+		MomoHandler: momoHandler,
 		// Add other handlers here if they are defined in HandlerDependencies
 		// Add missing handlers based on routes.go if needed
 		// Example: BlacklistHandler, SystemConfigHandler, WinnerHandler

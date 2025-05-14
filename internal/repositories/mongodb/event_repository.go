@@ -12,8 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-
-
 type EventRepository struct {
 	collection *mongo.Collection
 }
@@ -51,26 +49,41 @@ func (r *EventRepository) Delete(ctx context.Context, id primitive.ObjectID) err
 	return err
 }
 
-func (r *EventRepository) FindAll(ctx context.Context, page, limit int) ([]*models.Event, error) {
+func (r *EventRepository) FindAll(ctx context.Context, page, limit int, status models.EventStatus, filter string) ([]*models.Event, error) {
 	opts := options.Find().
-	SetSkip(int64((page - 1) * limit)).
-	SetLimit(int64(limit))
-	// .SetSort(bson.M{"scheduledAt": -1}) // Sort by scheduled date descending
+		SetSkip(int64((page - 1) * limit)).
+		SetLimit(int64(limit))
 
-	cursor, err := r.collection.Find(ctx, bson.M{}, opts)
+	// Create base query for active events
+	query := bson.M{"status": status}
+
+	// Add time-based filtering
+	now := time.Now()
+	switch filter {
+	case "upcoming":
+		query["start_at"] = bson.M{"$gt": now}
+	case "past":
+		query["end_at"] = bson.M{"$lt": now}
+	case "live":
+		query["$and"] = []bson.M{
+			{"start_at": bson.M{"$lte": now}},
+			{"end_at": bson.M{"$gte": now}},
+		}
+	}
+
+	cursor, err := r.collection.Find(ctx, query, opts)
 	if err != nil {
 		return nil, err
-   }
-	 defer cursor.Close(ctx)
+	}
+	defer cursor.Close(ctx)
 
-	 var events []*models.Event // Changed to pointer slice
-	 if err := cursor.All(ctx, &events); err != nil {
+	var events []*models.Event
+	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
-   }
+	}
 
-   	 // Ensure an empty slice is returned instead of nil if no campaigns found
-	 if events == nil {
+	if events == nil {
 		events = []*models.Event{}
 	}
 	return events, nil
-} 
+}
